@@ -113,7 +113,9 @@ try {
 
   // reset progress (confirmed) wipes the save
   await page.evaluate(() => { const s = __ER.scene; s.mode = 'won'; s.showTitle(); });
-  await tap('settings'); await tap('reset'); await tap('resetYes');
+  await sleep(500);
+  await tap('settings');
+  if (!(await ui('reset'))) { console.log('  (settings tap missed, retrying)', JSON.stringify(await state()).slice(0, 120)); await tap('settings'); } await tap('reset'); await tap('resetYes');
   sv = await save();
   check('confirmed reset wipes coins and upgrades', sv.coins === 0 && sv.upg.dmg === 0 && sv.music === false);
   await sleep(300);
