@@ -1,0 +1,21 @@
+{
+  "name": "era-runner",
+  "version": "0.1.0",
+  "description": "Era Runner - lane runner where your weapon evolves from the Stone Age to the Future (Phaser 3)",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "vite --host",
+    "build": "vite build",
+    "preview": "vite preview --host",
+    "test": "node tests/e2e.mjs"
+  },
+  "license": "ISC",
+  "dependencies": {
+    "phaser": "^3.90.0"
+  },
+  "devDependencies": {
+    "playwright-core": "^1.64.1",
+    "vite": "^8.3.4"
+  }
+}

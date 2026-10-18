@@ -1,0 +1,45 @@
+// Playtest screenshots at phone size: node tests/screens.mjs [url]
+import { chromium } from 'playwright-core';
+import { serveDist } from './serve.mjs';
+import { resolve } from 'node:path';
+const OUT = resolve(new URL('..', import.meta.url).pathname, 'screenshots');
+const srv = await serveDist();
+const url = process.argv[2] || `http://localhost:${srv.address().port}/`;
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH || '/usr/bin/google-chrome', args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
+const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, hasTouch: true, isMobile: true });
+const page = await ctx.newPage();
+const errors = [];
+page.on('pageerror', (e) => errors.push(e.message));
+page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+await page.goto(url);
+await page.waitForFunction(() => window.__ER?.ready);
+await sleep(800);
+const shot = async (n) => { await page.screenshot({ path: `${OUT}/${n}.png` }); console.log('saved', n, JSON.stringify(await page.evaluate(() => { const s = __ER.state(); return { era: s.eraName, t: s.time.toFixed(1), hp: s.hp, mode: s.mode }; }))); };
+await shot('01-title');
+await page.touchscreen.tap(195, 645);
+await page.evaluate(() => __ER.setBot('smart'));
+await sleep(3500);
+await shot('02-stone-age');
+// wait for a gate pair to be close
+await page.waitForFunction(() => __ER.scene.objs.some((o) => o.type === 'gate' && o.z < 650 && o.z > 350), null, { timeout: 30000 });
+await shot('03-gate-choice');
+await sleep(1200);
+await shot('04-after-gate');
+const simTo = (t) => page.evaluate((t) => __ER.sim(Math.max(0, t - __ER.state().time)), t);
+await simTo(14); await sleep(1500); await shot('05-bronze');
+await simTo(29); await sleep(1500); await shot('06-medieval');
+await simTo(41); await sleep(1500); await shot('07-gunpowder');
+await simTo(53); await sleep(1500); await shot('08-modern');
+await simTo(66); await sleep(1800); await shot('09-future');
+await page.evaluate(() => __ER.sim(30));
+await sleep(1500);
+await shot('10-win');
+// lose run: no steering
+await page.touchscreen.tap(195, 591);
+await sleep(300);
+await page.evaluate(() => { __ER.setBot(null); __ER.scene.tx = 0; return __ER.sim(80); });
+await sleep(1200);
+await shot('11-lose');
+console.log('errors', errors);
+await browser.close(); srv.close();
