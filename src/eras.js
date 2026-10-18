@@ -21,7 +21,7 @@ export const ERAS = [
   },
   {
     key: 'gunpowder', name: 'GUNPOWDER', weapon: 'Cannon', proj: 'ball',
-    rate: 2.0, dmg: 10, pspeed: 1300, pr: 13,
+    rate: 2.4, dmg: 8.5, pspeed: 1300, pr: 13,
     sky: [0x8fb8d8, 0xf5d7a8], ground: 0x7f8f4e, track: [0xdcc9a4, 0xc8b28b], rail: 0x5a4632,
     sil: 0x6f8370, sil2: 0x58695a, ui: 0xc0392b, burst: 0x2c4f9e, neon: false,
   },

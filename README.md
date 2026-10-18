@@ -7,7 +7,7 @@ Stone Age (sling) → Bronze Age (spear thrower) → Medieval (crossbow) → Gun
 
 Each era changes the scenery, the enemies, the projectiles and the weapon's stats. Steer through green boost gates
 (+fire rate, +damage, +shots, +health) and avoid red ones; shooting a gate raises its value. Reach the finish line
-(~80 s) to win.
+(~85 s) to win. Health slowly regenerates after a few seconds without being hit.
 
 **Play:** https://kaos811.github.io/era-runner/
 
@@ -25,6 +25,7 @@ npm run build      # production build -> dist/
 npm test           # Playwright e2e test at a 390x844 phone viewport (needs Chrome at /usr/bin/google-chrome or CHROME_PATH)
 node tests/tune.mjs     # balance check: plays the level with auto-pilot bots
 node tests/screens.mjs  # playtest screenshots -> screenshots/
+node tests/screens-feedback.mjs  # dense-section + gate-shooting screenshots
 ```
 Pushing to `main` deploys to GitHub Pages via `.github/workflows/deploy.yml`.
 

@@ -22,6 +22,10 @@ const FONT = '"Arial Black", "Arial Bold", "Helvetica Neue", Arial, sans-serif';
 const style = (size, color = '#ffffff', stroke = 6, extra = {}) => ({
   fontFamily: FONT, fontSize: size + 'px', fontStyle: 'bold', color, stroke: '#1a1a1a', strokeThickness: stroke, resolution: 2, align: 'center', ...extra,
 });
+// Gate values rise when shot, up to a sensible cap.
+const GATE_PCT_PER_SEC = 6;
+const GATE_SHOT_PER_SEC = 0.7;
+const GATE_CAP = { rate: 50, dmg: 50, hp: 50, shot: 2 };
 const KIND_LABEL = { rate: 'FIRE RATE', dmg: 'DAMAGE', shot: 'SHOTS', hp: 'HEALTH' };
 const fmtGate = (kind, v) => {
   const n = Math.round(v);
@@ -90,8 +94,8 @@ export class GameScene extends Phaser.Scene {
     this.hp = 100; this.maxHp = 100;
     this.era = 0; this.xp = 0;
     this.rateB = 0; this.dmgB = 0; this.extra = 0;
-    this.fireT = 0.3; this.time = 0; this.recoil = 0;
-    this.stats = { kills: 0, blocks: 0, gates: 0, damage: 0, hitsTaken: 0 };
+    this.fireT = 0.3; this.time = 0; this.lastHurt = -99; this.recoil = 0;
+    this.stats = { kills: 0, blocks: 0, gates: 0, damage: 0, hitsTaken: 0, hurtBySection: [0, 0, 0, 0, 0, 0] };
     this.eraTimes = [0];
     this.finishPassed = false;
     this.setEraVisuals(0, true);
@@ -141,6 +145,9 @@ export class GameScene extends Phaser.Scene {
     // spawn
     while (this.qi < L.items.length && L.items[this.qi].at - this.d < SPAWN_Z) this.spawn(L.items[this.qi++]);
 
+    // slow health regen after a few seconds without getting hit, so one mistake isn't fatal
+    if (this.hp > 0 && this.time - (this.lastHurt ?? -99) > 4) this.hp = Math.min(this.maxHp, this.hp + 1.2 * dt);
+
     // player steering (smoothed)
     this.px += (this.tx - this.px) * Math.min(1, dt * 14);
 
@@ -182,6 +189,7 @@ export class GameScene extends Phaser.Scene {
         if (!o.pair.used && o.z <= 0) this.takeGate(o.pair);
       } else if ((o.type === 'enemy' || o.type === 'block') && o.z < 30 && o.z > -40 && Math.abs(o.x - this.px) < o.halfW + 30) {
         this.hurt(o.dmg);
+        if (o.section !== undefined) this.stats.hurtBySection[o.section] += o.dmg;
         this.kill(o, false);
       } else if (o.type === 'finish' && o.z <= 0 && !this.finishPassed) {
         this.finishPassed = true;
@@ -214,14 +222,18 @@ export class GameScene extends Phaser.Scene {
     o.flash = 0.06;
     if (o.type === 'gate') {
       const g = o.gate;
-      const per = 2.4 / this.rate;
-      if (g.kind === 'shot') g.prog = (g.prog || 0) + per / 7;
-      else g.prog = (g.prog || 0) + per * (g.kind === 'hp' ? 1 : 0.9);
+      // Gate growth is time-based per stream of shots (dividing by fire rate), so a machine gun
+      // doesn't pump gates absurdly fast and a sling isn't hopelessly slow; extra projectiles
+      // and later eras speed it up a little. Per second, per stream: ~6% (rate/dmg/health),
+      // ~0.7 (shots) in the Stone Age, ~+10% per era after that.
+      const perSec = (g.kind === 'shot' ? GATE_SHOT_PER_SEC : GATE_PCT_PER_SEC) * (1 + 0.1 * this.era);
+      g.prog = (g.prog || 0) + perSec / this.rate;
       if (g.prog >= 1) {
         const inc = Math.floor(g.prog);
         g.prog -= inc;
-        g.value = Math.min(g.kind === 'shot' ? 2 : g.kind === 'hp' ? 50 : 50, g.value + inc);
-        this.refreshGate(o);
+        const before = g.value;
+        g.value = Math.min(GATE_CAP[g.kind], g.value + inc);
+        if (g.value !== before) this.refreshGate(o);
       }
       return;
     }
@@ -291,8 +303,8 @@ export class GameScene extends Phaser.Scene {
     if (g.kind === 'dmg') this.dmgB += v;
     if (g.kind === 'shot') this.extra = Phaser.Math.Clamp(this.extra + v, 0, 4);
     if (g.kind === 'hp') this.hp = Math.min(this.maxHp, this.hp + Math.max(v, 0));
-    this.rateB = Math.max(-60, this.rateB);
-    this.dmgB = Math.max(-60, this.dmgB);
+    this.rateB = Phaser.Math.Clamp(this.rateB, -60, 300);
+    this.dmgB = Phaser.Math.Clamp(this.dmgB, -60, 300);
     this.stats.gates++;
     chosen.dead = true; other.dead = true;
     if (this.simulating) return;
@@ -304,6 +316,7 @@ export class GameScene extends Phaser.Scene {
 
   hurt(amount) {
     this.hp = Math.max(0, this.hp - amount);
+    this.lastHurt = this.time;
     this.stats.hitsTaken++;
     if (this.simulating) return;
     this.cameras.main.shake(160, 0.008);
@@ -320,8 +333,8 @@ export class GameScene extends Phaser.Scene {
     if (it.type === 'enemy' || it.type === 'block') {
       // Catch-up: if the player is behind the curve (wrong gates, missed evolutions), soften this
       // section's enemies so a struggling run can still recover instead of snowballing.
-      const expected = eraDps(it.section) * HP_MULT[it.section] * 1.4;
-      const ease = Phaser.Math.Clamp((this.rate * this.dmg * this.shots) / expected, 0.4, 1);
+      const expected = eraDps(it.section) * HP_MULT[it.section] * 1.6;
+      const ease = Phaser.Math.Clamp((this.rate * this.dmg * this.shots) / expected, 0.35, 1);
       it = { ...it, hp: Math.max(1, Math.round(it.hp * ease)) };
       const c = this.add.container(0, 0);
       const isE = it.type === 'enemy';
@@ -330,8 +343,8 @@ export class GameScene extends Phaser.Scene {
       const hpText = this.add.text(0, isE ? -138 * it.size : -46, String(it.hp), style(isE ? 28 : 32, '#ffffff', 6)).setOrigin(0.5);
       c.add([sh, img, hpText]);
       if (it.size > 1.3 && isE) img.setTint(0xffd0c0);
-      this.objs.push({ type: it.type, c, img, hpText, x: it.x, z, hp: it.hp, maxHp: it.hp, size: it.size, dmg: it.dmg, halfW: (isE ? 36 : 50) * it.size,
-        walk: isE ? 55 : 0, hittable: true, eraLook: look, bob: Math.random() * 6 });
+      this.objs.push({ type: it.type, section: it.section, c, img, hpText, x: it.x, z, hp: it.hp, maxHp: it.hp, size: it.size, dmg: it.dmg, halfW: (isE ? 36 : 50) * it.size,
+        walk: isE ? 45 : 0, hittable: true, eraLook: look, bob: Math.random() * 6 });
     } else if (it.type === 'gate') {
       const pair = { used: false, objs: [] };
       it.gates.forEach((gd, i) => {
@@ -622,7 +635,9 @@ export class GameScene extends Phaser.Scene {
   }
 
   banner(title, sub, color) {
+    if (this.bannerC?.active) this.bannerC.destroy(); // never stack two banners
     const c = this.add.container(W / 2, 400).setDepth(8600);
+    this.bannerC = c;
     const bg = this.add.graphics();
     bg.fillStyle(0x000000, 0.55).fillRoundedRect(-230, -62, 460, 124, 22);
     bg.lineStyle(4, color, 1).strokeRoundedRect(-230, -62, 460, 124, 22);
@@ -721,17 +736,20 @@ export class GameScene extends Phaser.Scene {
 
   // ------------------------------------------------------------------ bot + test hooks
   botSteer(dt) {
-    const casual = this.bot === 'casual';
+    // 'smart' = near-perfect; 'casual' = 30% wrong gates, sloppy aim, ignores blocks;
+    // 'human' = a weaker player: slow reactions, poor aim, 35% wrong gates, often drifts off target.
+    const human = this.bot === 'human';
+    const casual = this.bot === 'casual' || human;
     this.botT = (this.botT || 0) - dt;
     if (casual && this.botT > 0) return;
-    this.botT = casual ? 0.45 : 0;
+    this.botT = human ? 0.7 : casual ? 0.45 : 0;
     const gates = this.objs.filter((o) => o.type === 'gate' && !o.dead && !o.pair.used && o.z > 0 && o.z < 1000);
     if (gates.length) {
       const pair = gates[0].pair;
       if (pair.choice === undefined) {
         const score = (o) => { const g = o.gate; const v = g.value; return g.kind === 'shot' ? v * 45 : g.kind === 'hp' ? (this.maxHp - this.hp > 30 ? 40 : 8) : v; };
         let best = score(pair.objs[0]) >= score(pair.objs[1]) ? 0 : 1;
-        if (casual && Math.random() < 0.3) best = 1 - best;
+        if (casual && Math.random() < (human ? 0.35 : 0.3)) best = 1 - best;
         pair.choice = best;
       }
       this.tx = pair.choice === 0 ? -100 : 100;
@@ -743,6 +761,9 @@ export class GameScene extends Phaser.Scene {
       const blocks = this.objs.filter((o) => o.type === 'block' && !o.dead && o.z > 0 && o.z < 600);
       const danger = (x) => blocks.some((b) => Math.abs(b.x - x) < b.halfW + 45 && b.hp > this.dmg * this.rate * this.shots * (b.z / RUN));
       if (danger(target)) target = [-150, 0, 150].find((x) => !danger(x)) ?? target;
+    } else if (human) {
+      if (Math.random() < 0.35) target = this.tx; // didn't react this time
+      target += (Math.random() - 0.5) * 220;
     } else target += (Math.random() - 0.5) * 80;
     this.tx = Phaser.Math.Clamp(target, -MAX_X, MAX_X);
   }

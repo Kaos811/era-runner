@@ -53,10 +53,22 @@ try {
   check('a good run reaches the finish', end.mode === 'won', `mode=${end.mode} era=${end.eraName} t=${end.time.toFixed(1)}s`);
   check('a good run evolves to the Future era', end.era === 5, `era times ${end.eraTimes.map((x) => x.toFixed(0)).join(',')}`);
 
-  // retry, then stand still -> lose screen
-  await page.evaluate(() => { __ER.scene.startRun(); __ER.setBot(null); __ER.scene.tx = 0; });
+  // retry on low health and stand still -> enemies get through -> lose screen
+  await page.evaluate(() => { __ER.scene.startRun(); __ER.setBot(null); __ER.scene.tx = 0; __ER.scene.hp = 15; });
   const lost = await page.evaluate(() => __ER.sim(120));
-  check('doing nothing loses (health reaches 0)', lost.mode === 'lost' && lost.hp === 0, `d=${(lost.d / lost.finish * 100).toFixed(0)}%`);
+  check('health reaching 0 shows the lose screen', lost.mode === 'lost' && lost.hp === 0, `d=${(lost.d / lost.finish * 100).toFixed(0)}%`);
+
+  // shooting a red gate turns it green within a short burst
+  const gate = await page.evaluate(() => {
+    const s = __ER.scene; s.startRun(); __ER.setBot(null);
+    const pair = { gates: [{ kind: 'rate', value: -20 }, { kind: 'dmg', value: -20 }] };
+    s.spawn({ type: 'gate', at: s.d + 1500, ...pair, section: 0 });
+    const g = s.objs.filter((o) => o.type === 'gate').slice(-2)[0];
+    s.tx = s.px = g.x; const v0 = g.gate.value;
+    let t = 0; while (g.gate.value <= 0 && !g.pair.used && t < 8) { s.step(1 / 60); t += 1 / 60; }
+    return { v0, v: g.gate.value, t };
+  });
+  check('a red -20% gate turns green before you reach it (Stone Age sling, 1 shot)', gate.v > 0, `${gate.v0} -> ${gate.v} in ${gate.t.toFixed(1)}s`);
   await sleep(500);
 
   await ctx.close();
