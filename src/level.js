@@ -26,7 +26,7 @@ const PLAN = [
   ['e2', 'b2', 'gate', 'e3', 'e2', 'swarm', 'gate', 'big', 'e2'],
   ['e3', 'big', 'gate', 'swarm', 'b2', 'e3', 'gate', 'big', 'e3'],
   ['swarm', 'e3', 'gate', 'big', 'b2', 'swarm', 'gate', 'e3', 'big'],
-  ['swarm', 'e3', 'gate', 'big', 'swarm', 'b2', 'e3', 'boss'],
+  ['swarm', 'e3', 'gate', 'big', 'swarm', 'b2', 'e3', 'gate'],
 ];
 
 // Enemy HP grows a little faster than the base weapon to account for gate boosts.
@@ -112,7 +112,6 @@ export function buildLevel(seed = 11) {
     });
   }
   const finish = START + 6 * SECTION - 150;
-  items.push({ type: 'finish', at: finish });
   items.sort((a, b) => a.at - b.at);
   const need = sectionHP.slice(0, 5).map((v) => Math.round(v * XP_FACTOR));
   return { items, need, finish, sectionHP };

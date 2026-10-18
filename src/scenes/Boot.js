@@ -178,12 +178,102 @@ function misc(scene) {
   });
 }
 
+// ---------- bosses (260 x 220 logical, facing the player, ground at bottom) ----------
+function bosses(scene) {
+  make(scene, 'boss_stone', 260, 220, (p) => { // woolly mammoth
+    p.fill(0x4a2c17).rrect(40, 150, 36, 70, 14).rrect(184, 150, 36, 70, 14).rrect(80, 160, 30, 60, 12).rrect(150, 160, 30, 60, 12);
+    p.fill(0x6b4226).ellipse(130, 110, 250, 170);
+    p.fill(0x7d5030).ellipse(130, 92, 200, 120);
+    for (let i = 0; i < 9; i++) p.fill(0x5a361d).tri(20 + i * 26, 150, 34 + i * 26, 182, 46 + i * 26, 150);
+    p.fill(0x8a5a36).ellipse(130, 80, 120, 100); p.fill(0x5a361d).ellipse(130, 40, 90, 34);
+    p.fill(0x6b4226).ellipse(66, 86, 54, 74).ellipse(194, 86, 54, 74); // ears
+    p.line(16, 0xf4ecd8).spoly([[104, 112], [86, 150], [96, 186], [124, 196]]).spoly([[156, 112], [174, 150], [164, 186], [136, 196]]);
+    p.fill(0x7d5030).rrect(116, 100, 28, 90, 14); p.fill(0x6b4226).rrect(118, 170, 24, 30, 10);
+    p.fill(0xffffff).circle(108, 78, 9).circle(152, 78, 9); p.fill(0xd62f2f).circle(109, 79, 5).circle(151, 79, 5); p.fill(0x111111).circle(109, 79, 2.5).circle(151, 79, 2.5);
+    p.line(5, 0x2b1a0e).seg(94, 64, 120, 72).seg(166, 64, 140, 72);
+  });
+  make(scene, 'boss_bronze', 260, 220, (p) => { // chariot champion
+    const wheel = (x) => { p.fill(0x5a3a1a).circle(x, 170, 44); p.fill(0x8b5a2b).circle(x, 170, 36); p.line(5, 0x5a3a1a); for (let i = 0; i < 6; i++) { const a = (i * Math.PI) / 3; p.seg(x, 170, x + Math.cos(a) * 36, 170 + Math.sin(a) * 36); } p.fill(0xcd7f32).circle(x, 170, 9); };
+    wheel(40); wheel(220);
+    p.fill(0xa86424).rrect(50, 120, 160, 80, 14); p.fill(0xcd7f32).rrect(58, 126, 144, 66, 10); p.fill(0xe7a95b).rect(58, 150, 144, 6);
+    p.fill(0xb5452f).rrect(98, 58, 64, 70, 16); p.fill(0xf1c27d).circle(130, 42, 26);
+    p.fill(0xcd7f32).rrect(102, 14, 56, 28, { tl: 26, tr: 26, bl: 4, br: 4 }); p.fill(0xc0392b).rrect(118, -2 + 4, 24, 22, 8);
+    p.fill(0x111111).circle(120, 44, 4).circle(140, 44, 4); p.line(4, 0x2b1a10).seg(110, 34, 124, 38).seg(150, 34, 136, 38);
+    p.fill(0x8a5a2b).rect(186, 0, 8, 130); p.fill(0xcd7f32).tri(190, 0, 180, 24, 200, 24);
+    p.fill(0xcd7f32).circle(80, 104, 30); p.fill(0xa86424).circle(80, 104, 22); p.fill(0xe7a95b).circle(80, 104, 8);
+    p.fill(0x7a4f2a).ellipse(130, 196, 70, 46); p.fill(0x8b5a36).ellipse(130, 182, 50, 50); p.fill(0xcd7f32).rrect(112, 160, 36, 16, 6);
+    p.fill(0x111111).circle(118, 186, 4).circle(142, 186, 4);
+  });
+  make(scene, 'boss_medieval', 260, 220, (p) => { // castle dragon
+    p.fill(0x1f6e3a).poly([[110, 90], [0, 20], [16, 70], [4, 110], [40, 120], [60, 160]]).poly([[150, 90], [260, 20], [244, 70], [256, 110], [220, 120], [200, 160]]);
+    p.fill(0x2e9a52).poly([[110, 96], [20, 40], [34, 80], [60, 130]]).poly([[150, 96], [240, 40], [226, 80], [200, 130]]);
+    p.fill(0x2e8b4a).ellipse(130, 150, 150, 130); p.fill(0xe8d27a).ellipse(130, 160, 80, 100);
+    for (let i = 0; i < 5; i++) p.fill(0xcfb75e).rect(96, 126 + i * 16, 68, 3);
+    p.fill(0x2e8b4a).rrect(40, 180, 40, 40, 12).rrect(180, 180, 40, 40, 12);
+    p.fill(0x2e8b4a).ellipse(130, 62, 92, 80); p.fill(0x267a40).ellipse(130, 90, 70, 40);
+    p.fill(0xf4ecd8).tri(96, 34, 84, 0, 106, 26).tri(164, 34, 176, 0, 154, 26);
+    p.fill(0xffd23f).ellipse(110, 56, 20, 14).ellipse(150, 56, 20, 14); p.fill(0x111111).rect(108, 50, 4, 12).rect(148, 50, 4, 12);
+    p.fill(0x7a1f1f).ellipse(130, 94, 46, 18); p.fill(0xff8a1f).ellipse(130, 96, 30, 10); p.fill(0xffffff).tri(114, 88, 118, 96, 122, 88).tri(138, 88, 142, 96, 146, 88);
+  });
+  make(scene, 'boss_gunpowder', 260, 220, (p) => { // pirate galleon (bow view)
+    p.fill(0x5a3a1a).rect(126, 0, 8, 150); p.fill(0x5a3a1a).rect(60, 30, 140, 6);
+    p.fill(0xf3ead2).poly([[66, 36], [194, 36], [186, 110], [74, 110]]); p.fill(0xe0d4b4).rect(74, 70, 112, 4);
+    p.fill(0x222222).circle(130, 72, 16); p.fill(0xf3ead2).circle(124, 70, 4).circle(136, 70, 4); p.line(4, 0x222222).seg(114, 92, 146, 100).seg(146, 92, 114, 100);
+    p.fill(0x111111).poly([[134, 0], [160, 6], [134, 14]]);
+    p.fill(0x6b4423).poly([[10, 120], [250, 120], [210, 210], [50, 210]]); p.fill(0x8b5a2b).poly([[24, 128], [236, 128], [204, 200], [56, 200]]);
+    p.fill(0x5a3a1a).rect(24, 150, 212, 6).rect(40, 178, 180, 5);
+    for (let i = 0; i < 4; i++) { p.fill(0x111111).circle(60 + i * 47, 166, 9); p.fill(0x3a3a3a).circle(60 + i * 47, 166, 5); }
+    p.fill(0xf0b429).rect(10, 118, 240, 5);
+    p.fill(0x2b6ea8, 0.85).ellipse(130, 214, 260, 20); p.fill(0xffffff, 0.6).ellipse(70, 210, 50, 8).ellipse(190, 210, 50, 8);
+  });
+  make(scene, 'boss_modern', 260, 220, (p) => { // battle tank (front view)
+    p.fill(0x2b2b2b).rrect(0, 130, 64, 90, 10).rrect(196, 130, 64, 90, 10);
+    for (let i = 0; i < 5; i++) { p.fill(0x444444).rect(4, 136 + i * 17, 56, 7); p.fill(0x444444).rect(200, 136 + i * 17, 56, 7); }
+    p.fill(0x556b2f).poly([[40, 110], [220, 110], [236, 200], [24, 200]]); p.fill(0x6b8237).poly([[54, 116], [206, 116], [214, 150], [46, 150]]);
+    p.fill(0x3e4a24).rect(30, 186, 200, 10); p.fill(0xffd84d).circle(70, 170, 9).circle(190, 170, 9);
+    p.fill(0x4a5a28).rrect(70, 50, 120, 70, 24); p.fill(0x5d6b3a).rrect(80, 56, 100, 40, 18);
+    p.fill(0x2b2b2b).circle(130, 92, 22); p.fill(0x111111).circle(130, 92, 13); p.fill(0x3a3a3a).rrect(96, 40, 30, 16, 6);
+    p.fill(0xffffff).poly([[130, 128], [135, 140], [148, 140], [138, 148], [142, 160], [130, 152], [118, 160], [122, 148], [112, 140], [125, 140]]);
+    p.fill(0x222222).rect(170, 20, 4, 36); p.fill(0xc0392b).rect(174, 20, 18, 10);
+  });
+  make(scene, 'boss_future', 260, 220, (p) => { // mega robot
+    p.fill(0x4b5670).rrect(70, 160, 44, 60, 10).rrect(146, 160, 44, 60, 10); p.fill(0x29f0ff).rect(76, 196, 32, 4).rect(152, 196, 32, 4);
+    p.fill(0x6c7a96).rrect(14, 70, 44, 110, 18).rrect(202, 70, 44, 110, 18);
+    p.fill(0x9aa6c0).rrect(0, 56, 70, 40, 14).rrect(190, 56, 70, 40, 14);
+    p.fill(0x29f0ff).circle(36, 172, 14).circle(224, 172, 14); p.fill(0xffffff).circle(36, 172, 6).circle(224, 172, 6);
+    p.fill(0x7d8aa8).rrect(56, 60, 148, 116, 22); p.fill(0x5a6b8c).rrect(70, 74, 120, 88, 16);
+    p.fill(0x29f0ff, 0.35).circle(130, 118, 30); p.fill(0x29f0ff).circle(130, 118, 18); p.fill(0xffffff).circle(130, 118, 8);
+    p.fill(0x9aa6c0).rrect(94, 4, 72, 60, 14); p.fill(0x111a2e).rrect(100, 18, 60, 22, 8); p.fill(0xff3b5c).rrect(104, 23, 52, 12, 6);
+    p.fill(0x9aa6c0).rect(126, -2 + 2, 8, 6);
+    p.fill(0x3a4560).rrect(10, 40, 30, 20, 6).rrect(220, 40, 30, 20, 6); p.fill(0xff4fd8).circle(25, 44, 5).circle(235, 44, 5);
+  });
+  // boss projectiles
+  make(scene, 'bp_rock', 40, 40, (p) => { p.fill(0x5c5852).circle(20, 20, 19); p.fill(0x8d8a85).circle(18, 18, 15); p.fill(0xb5b1aa).circle(13, 13, 5); });
+  make(scene, 'bp_spear', 16, 70, (p) => { p.fill(0x8a5a2b).rect(6, 16, 4, 54); p.fill(0xcd7f32).tri(8, 0, 0, 20, 16, 20); });
+  make(scene, 'bp_fire', 44, 44, (p) => { p.fill(0xff4a1f, 0.5).circle(22, 22, 22); p.fill(0xff8a1f).circle(22, 22, 15); p.fill(0xffe14d).circle(22, 22, 8); });
+  make(scene, 'bp_ball', 40, 40, (p) => { p.fill(0xff9a2e, 0.4).circle(20, 20, 20); p.fill(0x1b1d22).circle(20, 20, 15); p.fill(0x5a606a).circle(15, 15, 5); });
+  make(scene, 'bp_shell', 26, 50, (p) => { p.fill(0xff9a2e, 0.4).ellipse(13, 30, 26, 40); p.fill(0x6b7340).rrect(5, 6, 16, 40, 8); p.fill(0xd4a017).rect(5, 36, 16, 6); p.fill(0x3e4a24).tri(13, 0, 5, 12, 21, 12); });
+  make(scene, 'bp_plasma', 44, 44, (p) => { p.fill(0xff4fd8, 0.35).circle(22, 22, 22); p.fill(0xff4fd8).circle(22, 22, 13); p.fill(0xffffff).circle(22, 22, 6); });
+}
+
+function icons(scene) {
+  make(scene, 'coin', 24, 24, (p) => { p.fill(0xb8860b).circle(12, 12, 12); p.fill(0xffd84d).circle(12, 12, 10); p.fill(0xf0b429).circle(12, 12, 7); p.fill(0xfff1a8).rrect(10, 6, 4, 12, 2); });
+  make(scene, 'icon_dmg', 48, 48, (p) => { p.fill(0xd9dee3).poly([[24, 2], [32, 10], [16, 40], [8, 32]]); p.fill(0x8b5a2b).rrect(4, 34, 14, 10, 3); p.fill(0xf0b429).poly([[6, 26], [22, 42], [18, 46], [2, 30]]); p.fill(0xff5a4f).circle(38, 10, 7); });
+  make(scene, 'icon_rate', 48, 48, (p) => { p.fill(0xffd84d).poly([[28, 2], [8, 28], [22, 28], [16, 46], [40, 18], [26, 18]]); });
+  make(scene, 'icon_hp', 48, 48, (p) => { p.fill(0xff3b5c).circle(15, 17, 12).circle(33, 17, 12).tri(4, 22, 44, 22, 24, 44); p.fill(0xffffff, 0.6).circle(13, 13, 4); });
+  make(scene, 'icon_xp', 48, 48, (p) => { p.fill(0x1e8f4e).poly([[24, 2], [44, 22], [24, 46], [4, 22]]); p.fill(0x5cff8a).poly([[24, 7], [38, 22], [24, 40], [10, 22]]); p.fill(0xd6ffe2).poly([[24, 9], [30, 18], [24, 21], [18, 18]]); });
+  make(scene, 'icon_coin', 48, 48, (p) => { p.fill(0xb8860b).circle(18, 28, 16); p.fill(0xffd84d).circle(18, 28, 13); p.fill(0xb8860b).circle(30, 18, 16); p.fill(0xffd84d).circle(30, 18, 13); p.fill(0xfff1a8).rrect(28, 10, 4, 16, 2); });
+  make(scene, 'icon_gear', 40, 40, (p) => { p.fill(0xffffff); for (let i = 0; i < 8; i++) { const a = (i * Math.PI) / 4; p.circle(20 + Math.cos(a) * 14, 20 + Math.sin(a) * 14, 5); } p.circle(20, 20, 14); p.fill(0x333333).circle(20, 20, 6); });
+}
+
 export class BootScene extends Phaser.Scene {
   constructor() { super('boot'); }
   create() {
     ERAS.forEach((e) => { enemy(this, e.key); block(this, e.key); weapon(this, e.key); });
     projectiles(this);
     misc(this);
+    bosses(this);
+    icons(this);
     this.scene.start('game');
   }
 }

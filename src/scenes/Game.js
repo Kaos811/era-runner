@@ -1,6 +1,12 @@
 import Phaser from 'phaser';
 import { ERAS, eraDps } from '../eras.js';
 import { buildLevel, HP_MULT } from '../level.js';
+import { Save } from '../save.js';
+import { runMods } from '../upgrades.js';
+import { Sound } from '../audio.js';
+import { BossMethods, BOSS_HOME_Z, LANES } from '../bosses.js';
+import { ScreenMethods } from '../screens.js';
+import { style, col } from '../ui.js';
 
 // ---- layout / fake-3D projection ----
 const W = 540, H = 960, CX = 270;
@@ -17,11 +23,6 @@ const MAX_X = 205;
 const TK = 0.5;          // textures are generated at 2x
 
 const project = (x, z) => { const s = D / (D + z); return { s, x: CX + x * s, y: HY + (PY - HY) * s }; };
-const col = (c) => '#' + c.toString(16).padStart(6, '0');
-const FONT = '"Arial Black", "Arial Bold", "Helvetica Neue", Arial, sans-serif';
-const style = (size, color = '#ffffff', stroke = 6, extra = {}) => ({
-  fontFamily: FONT, fontSize: size + 'px', fontStyle: 'bold', color, stroke: '#1a1a1a', strokeThickness: stroke, resolution: 2, align: 'center', ...extra,
-});
 // Gate values rise when shot, up to a sensible cap.
 const GATE_PCT_PER_SEC = 6;
 const GATE_SHOT_PER_SEC = 0.7;
@@ -38,6 +39,8 @@ export class GameScene extends Phaser.Scene {
 
   create() {
     this.top = 0;
+    this.ui = {};
+    Sound.init(Save.data);
 
     this.bgOld = this.add.graphics().setDepth(0);
     this.bg = this.add.graphics().setDepth(1);
@@ -91,20 +94,26 @@ export class GameScene extends Phaser.Scene {
     this.objs = [];
     this.projs = [];
     this.d = 0; this.px = 0; this.tx = 0;
-    this.hp = 100; this.maxHp = 100;
+    this.mods = runMods(this.testUpg || Save.data.upg);
+    this.maxHp = this.mods.maxHp; this.hp = this.maxHp;
     this.era = 0; this.xp = 0;
+    this.runSpeed = RUN; this.runCoins = 0;
+    if (this.boss) { this.bprojs?.forEach((p) => p.img?.destroy()); }
+    this.boss = null; this.bossWarns = []; this.bprojs = [];
+    this.showBossBar?.(false);
     this.rateB = 0; this.dmgB = 0; this.extra = 0;
     this.fireT = 0.3; this.time = 0; this.lastHurt = -99; this.recoil = 0;
-    this.stats = { kills: 0, blocks: 0, gates: 0, damage: 0, hitsTaken: 0, hurtBySection: [0, 0, 0, 0, 0, 0] };
+    this.stats = { kills: 0, blocks: 0, gates: 0, damage: 0, hitsTaken: 0, hurtBySection: [0, 0, 0, 0, 0, 0], coins: 0 };
     this.eraTimes = [0];
     this.finishPassed = false;
+    this.finishZ = this.level.finish;
     this.setEraVisuals(0, true);
     this.weaponImg.setTexture('weapon_' + ERAS[0].key);
     this.updateHud(true);
   }
 
-  get rate() { return ERAS[this.era].rate * Math.max(0.4, 1 + this.rateB / 100); }
-  get dmg() { return ERAS[this.era].dmg * Math.max(0.4, 1 + this.dmgB / 100); }
+  get rate() { return ERAS[this.era].rate * Math.max(0.4, 1 + this.rateB / 100) * this.mods.rateMul; }
+  get dmg() { return ERAS[this.era].dmg * Math.max(0.4, 1 + this.dmgB / 100) * this.mods.dmgMul; }
   get shots() { return Phaser.Math.Clamp(1 + this.extra, 1, 5); }
 
   // ------------------------------------------------------------------ input
@@ -132,21 +141,21 @@ export class GameScene extends Phaser.Scene {
       this.step(dt);
     } else {
       // attract mode / end screen: keep the track scrolling gently
-      this.d += (this.mode === 'title' ? 120 : 40) * dt;
+      if (!this.boss) this.d += (this.mode === 'title' || this.mode === 'shop' || this.mode === 'settings' ? 120 : 40) * dt;
     }
     this.render();
   }
 
   step(dt) {
     this.time += dt;
-    this.d += RUN * dt;
+    // the track stops for the boss fight
+    this.runSpeed = this.boss ? Math.max(0, this.runSpeed - 450 * dt) : RUN;
+    this.d += this.runSpeed * dt;
     const L = this.level;
 
     // spawn
     while (this.qi < L.items.length && L.items[this.qi].at - this.d < SPAWN_Z) this.spawn(L.items[this.qi++]);
-
-    // slow health regen after a few seconds without getting hit, so one mistake isn't fatal
-    if (this.hp > 0 && this.time - (this.lastHurt ?? -99) > 4) this.hp = Math.min(this.maxHp, this.hp + 1.2 * dt);
+    if (!this.boss && this.d >= L.finish - 120) this.startBoss();
 
     // player steering (smoothed)
     this.px += (this.tx - this.px) * Math.min(1, dt * 14);
@@ -154,7 +163,9 @@ export class GameScene extends Phaser.Scene {
     // move objects
     for (const o of this.objs) {
       if (o.dead) continue;
-      o.z -= (RUN + (o.walk || 0)) * dt;
+      if (o.flash > 0) o.flash -= dt;
+      if (o.type === 'boss') continue;
+      o.z -= (this.runSpeed + (o.walk || 0)) * dt;
       if (o.type === 'enemy' && o.z < 1100 && o.z > 60) {
         const dx = this.px - o.x;
         o.x += Math.sign(dx) * Math.min(Math.abs(dx), 32 * dt);
@@ -165,6 +176,8 @@ export class GameScene extends Phaser.Scene {
     // fire
     this.fireT -= dt;
     while (this.fireT <= 0) { this.fire(); this.fireT += 1 / this.rate; }
+
+    if (this.boss) { this.bossStep(dt); if (this.mode !== 'play') return; }
 
     // projectiles
     for (const p of this.projs) {
@@ -196,7 +209,7 @@ export class GameScene extends Phaser.Scene {
         this.win();
         return;
       }
-      if (o.z < -260) o.dead = true;
+      if (o.z < -260 && o.type !== 'boss') o.dead = true;
     }
 
     // cleanup
@@ -216,9 +229,11 @@ export class GameScene extends Phaser.Scene {
       this.projs.push({ img, x, z: 40, speed: e.pspeed, r: e.pr, dmg: this.dmg });
     }
     this.recoil = e.key === 'gunpowder' ? 12 : 6;
+    if (!this.simulating) Sound.play('shot_' + e.key);
   }
 
   hit(o, p) {
+    if (o.type === 'boss') { this.bossHit(p); return; }
     o.flash = 0.06;
     if (o.type === 'gate') {
       const g = o.gate;
@@ -245,13 +260,18 @@ export class GameScene extends Phaser.Scene {
       this.kill(o, true);
     } else {
       o.hpText.setText(String(Math.ceil(o.hp)));
+      if (!this.simulating) Sound.play('hit');
     }
   }
 
   kill(o, byShot) {
     o.dead = true;
-    if (byShot) { if (o.type === 'enemy') this.stats.kills++; else this.stats.blocks++; }
+    if (byShot) {
+      if (o.type === 'enemy') this.stats.kills++; else this.stats.blocks++;
+      this.addCoins(o.type === 'block' ? 2 : o.size > 1.3 ? 3 : 1, o);
+    }
     if (this.simulating) return;
+    Sound.play(o.type === 'block' ? 'smash' : 'kill');
     const pr = project(o.x, Math.max(o.z, 0));
     const color = o.type === 'block' ? 0x9a8a70 : ERAS[o.eraLook].burst;
     for (let i = 0; i < 9; i++) {
@@ -287,6 +307,7 @@ export class GameScene extends Phaser.Scene {
     this.weaponImg.setTexture('weapon_' + e.key);
     this.tweens.add({ targets: this.weaponImg, scale: { from: TK * 1.6, to: TK }, duration: 420, ease: 'Back.easeOut' });
     this.cameras.main.flash(260, 255, 255, 255);
+    Sound.play('evolve');
     this.setEraVisuals(this.era, false);
     this.banner(`${e.name}!`, `New weapon: ${e.weapon}`, e.ui);
     this.updateHud(true);
@@ -309,6 +330,7 @@ export class GameScene extends Phaser.Scene {
     chosen.dead = true; other.dead = true;
     if (this.simulating) return;
     const good = v > 0;
+    Sound.play(good ? 'gate_good' : 'gate_bad');
     this.toast(`${fmtGate(g.kind, v)} ${KIND_LABEL[g.kind]}`, good ? '#7dff9a' : '#ff6b6b');
     if (!good) this.cameras.main.shake(120, 0.004);
     this.updateHud(true);
@@ -319,6 +341,7 @@ export class GameScene extends Phaser.Scene {
     this.lastHurt = this.time;
     this.stats.hitsTaken++;
     if (this.simulating) return;
+    Sound.play('hurt');
     this.cameras.main.shake(160, 0.008);
     this.hurtFlash.setAlpha(0.45);
     this.tweens.add({ targets: this.hurtFlash, alpha: 0, duration: 350 });
@@ -398,13 +421,14 @@ export class GameScene extends Phaser.Scene {
       const fade = o.z > 1500 ? Phaser.Math.Clamp((SPAWN_Z - o.z) / 400, 0, 1) : 1;
       o.c.setAlpha(fade);
       if (o.img && o.type !== 'gate') {
-        if (o.flash > 0) o.img.setTintFill(0xffffff);
+        if (o.flash > 0) { if (o.type === 'boss') o.img.setTint(0xffb0a0); else o.img.setTintFill(0xffffff); }
         else if (o.size > 1.3 && o.type === 'enemy') o.img.setTint(0xffd0c0);
         else o.img.clearTint();
       } else if (o.type === 'gate') {
         o.panel.setAlpha(o.flash > 0 ? 1 : 0.92);
       }
     }
+    this.renderBoss();
     for (const p of this.projs) {
       const pr = project(p.x, p.z);
       p.img.setPosition(pr.x, pr.y - 58 * pr.s).setScale(TK * pr.s).setDepth(10 + FAR - p.z);
@@ -463,6 +487,7 @@ export class GameScene extends Phaser.Scene {
         }
       }
     }
+    this.drawBossWarns(quad);
     // horizon fog
     const f = this.fog;
     f.clear();
@@ -567,8 +592,10 @@ export class GameScene extends Phaser.Scene {
     panel.fillStyle(0x000000, 0.42).fillRoundedRect(10, 10, 520, 172, 18);
     this.hudG = wrap(this.add.graphics());
     wrap(this.add.image(32, 34, 'heart').setScale(0.55));
-    this.hpText = wrap(this.add.text(150, 34, '', style(16, '#ffffff', 4)).setOrigin(0.5));
-    wrap(this.add.text(372, 34, 'FINISH', style(13, '#ffe14d', 3)).setOrigin(1, 0.5));
+    this.hpText = wrap(this.add.text(137, 34, '', style(16, '#ffffff', 4)).setOrigin(0.5));
+    wrap(this.add.text(375, 34, 'BOSS', style(13, '#ff8a80', 3)).setOrigin(1, 0.5));
+    wrap(this.add.image(250, 34, 'coin').setScale(0.55));
+    this.coinText = wrap(this.add.text(266, 34, '0', style(18, '#ffe14d', 4)).setOrigin(0, 0.5));
     this.eraIcon = wrap(this.add.image(46, 82, 'weapon_stone').setScale(0.22));
     this.eraText = wrap(this.add.text(78, 70, '', style(28, '#ffffff', 6)).setOrigin(0, 0.5));
     this.weapText = wrap(this.add.text(80, 96, '', style(15, '#ffe9b0', 4)).setOrigin(0, 0.5));
@@ -597,8 +624,8 @@ export class GameScene extends Phaser.Scene {
     g.clear();
     // health
     const hpF = this.hp / this.maxHp;
-    g.fillStyle(0x2a1010, 1).fillRoundedRect(50, 24, 200, 20, 8);
-    if (hpF > 0) g.fillStyle(hpF > 0.35 ? 0x4cd964 : 0xff3b30, 1).fillRoundedRect(50, 24, Math.max(16, 200 * hpF), 20, 8);
+    g.fillStyle(0x2a1010, 1).fillRoundedRect(50, 24, 175, 20, 8);
+    if (hpF > 0) g.fillStyle(hpF > 0.35 ? 0x4cd964 : 0xff3b30, 1).fillRoundedRect(50, 24, Math.max(16, 175 * hpF), 20, 8);
     // level progress
     const prog = Phaser.Math.Clamp(this.d / this.level.finish, 0, 1);
     g.fillStyle(0x222222, 1).fillRoundedRect(380, 26, 140, 16, 7);
@@ -615,6 +642,8 @@ export class GameScene extends Phaser.Scene {
     for (let i = 0; i < 5; i++) { g.fillStyle(i < this.era ? 0xffffff : 0x777777, 0.8); g.fillTriangle(62 + i * 83 + 36, 156, 62 + i * 83 + 36, 164, 62 + i * 83 + 44, 160); }
 
     this.hpText.setText(`${Math.ceil(this.hp)} / ${this.maxHp}`);
+    const cs = String(this.runCoins);
+    if (this.coinText.text !== cs) this.coinText.setText(cs);
     const xpLabel = this.era >= 5 ? 'MAX ERA REACHED!' : `XP ${Math.floor(this.xp)} / ${this.level.need[this.era]}   NEXT: ${ERAS[this.era + 1].name}`;
     this.xpText.setText(xpLabel);
     if (force || this.hudEra !== this.era) {
@@ -628,8 +657,8 @@ export class GameScene extends Phaser.Scene {
     if (st !== this.lastSt) { this.lastSt = st; this.statText.setText(st); }
   }
 
-  toast(msg, color) {
-    const t = this.add.text(CX + this.px, PY - 150, msg, style(30, color, 7)).setOrigin(0.5).setDepth(8500);
+  toast(msg, color, y = PY - 150) {
+    const t = this.add.text(y === PY - 150 ? CX + this.px : CX, y, msg, style(30, color, 7)).setOrigin(0.5).setDepth(8500);
     t.x = Phaser.Math.Clamp(t.x, t.width / 2 + 10, W - t.width / 2 - 10);
     this.tweens.add({ targets: t, y: t.y - 90, alpha: { from: 1, to: 0 }, duration: 1300, ease: 'Cubic.easeOut', onComplete: () => t.destroy() });
   }
@@ -650,89 +679,90 @@ export class GameScene extends Phaser.Scene {
     this.tweens.add({ targets: c, alpha: 0, delay: 1500, duration: 400, onComplete: () => c.destroy() });
   }
 
-  // ------------------------------------------------------------------ screens
-  makeButton(container, y, label, cb) {
-    const bw = 300, bh = 84;
-    const g = this.add.graphics();
-    g.fillStyle(0x1e7a3a, 1).fillRoundedRect(-bw / 2, y - bh / 2 + 6, bw, bh, 24);
-    g.fillStyle(0x34c759, 1).fillRoundedRect(-bw / 2, y - bh / 2, bw, bh, 24);
-    g.fillStyle(0xffffff, 0.22).fillRoundedRect(-bw / 2 + 10, y - bh / 2 + 6, bw - 20, 26, 14);
-    const t = this.add.text(0, y, label, style(36, '#ffffff', 7)).setOrigin(0.5);
-    const zone = this.add.zone(0, y, bw, bh).setInteractive({ useHandCursor: true });
-    zone.on('pointerup', cb);
-    container.add([g, t, zone]);
-    this.tweens.add({ targets: t, scale: 1.07, yoyo: true, repeat: -1, duration: 600 });
-    return zone;
-  }
-
-  showTitle() {
-    this.mode = 'title';
-    const c = this.add.container(W / 2, 0).setDepth(9000);
-    this.screen = c;
-    const dim = this.add.rectangle(0, H / 2, W * 4, H * 3, 0x000000, 0.35);
-    const t1 = this.add.text(0, 270, 'ERA', style(96, '#ffe14d', 14)).setOrigin(0.5);
-    const t2 = this.add.text(0, 360, 'RUNNER', style(84, '#ffffff', 14)).setOrigin(0.5);
-    const sub = this.add.text(0, 432, 'Evolve your weapon from the\nStone Age to the Future!', style(22, '#ffffff', 5)).setOrigin(0.5);
-    c.add([dim, t1, t2, sub]);
-    const row = this.add.graphics();
-    row.fillStyle(0x000000, 0.4).fillRoundedRect(-250, 480, 500, 92, 20);
-    c.add(row);
-    ERAS.forEach((e, i) => {
-      const x = -208 + i * 83;
-      c.add(this.add.image(x, 526, 'weapon_' + e.key).setScale(0.24));
-      if (i < 5) c.add(this.add.text(x + 42, 526, '›', style(30, '#ffe14d', 4)).setOrigin(0.5));
-    });
-    const how = this.add.text(0, 640,
-      'DRAG left / right to steer\nYour weapon fires on its own\nDefeat enemies to earn XP and EVOLVE\nSteer through GREEN gates, avoid RED', style(19, '#ffffff', 5, { lineSpacing: 6 })).setOrigin(0.5);
-    c.add(how);
-    this.makeButton(c, 790, 'TAP TO PLAY', () => this.startRun());
-    this.tweens.add({ targets: [t1, t2], y: '-=8', yoyo: true, repeat: -1, duration: 1200, ease: 'Sine.easeInOut' });
-  }
-
+  // ------------------------------------------------------------------ run start / end
   startRun() {
     if (this.mode === 'play') return;
-    if (this.screen) { this.screen.destroy(); this.screen = null; }
-    if (this.mode !== 'title') this.resetRun();
+    this.closeScreen();
+    const fromTitle = this.mode === 'title' && !this.runStarted;
+    if (!fromTitle) this.resetRun();
+    else { this.mods = runMods(this.testUpg || Save.data.upg); this.maxHp = this.mods.maxHp; this.hp = this.maxHp; }
+    this.runStarted = true;
     this.d = 0;
     this.mode = 'play';
     this.dragging = false;
+    this.hud.setVisible(true);
+    Sound.setSong('run');
+    if (this.mods.startXp) {
+      const sim = this.simulating;
+      this.simulating = true;
+      this.gainXp(this.mods.startXp);
+      this.simulating = sim;
+      this.setEraVisuals(this.era, true);
+      this.weaponImg.setTexture('weapon_' + ERAS[this.era].key);
+    }
+    this.updateHud(true);
+    if (this.simulating) return;
     const hint = this.add.text(W / 2, 640, '◀  DRAG TO STEER  ▶', style(26, '#ffffff', 6)).setOrigin(0.5).setDepth(8500);
     this.tweens.add({ targets: hint, alpha: 0, delay: 2200, duration: 600, onComplete: () => hint.destroy() });
   }
 
-  endScreen(won) {
-    this.mode = won ? 'won' : 'lost';
-    this.dragging = false;
-    const c = this.add.container(W / 2, 0).setDepth(9000);
-    this.screen = c;
-    const dim = this.add.rectangle(0, H / 2, W * 4, H * 3, 0x000000, 0.55);
-    const g = this.add.graphics();
-    g.fillStyle(0x1b1b24, 0.94).fillRoundedRect(-235, 215, 470, 560, 28);
-    g.lineStyle(5, won ? 0xffe14d : 0xff5a4f, 1).strokeRoundedRect(-235, 215, 470, 560, 28);
-    const title = this.add.text(0, 270, won ? 'LEVEL COMPLETE!' : 'DEFEATED', style(won ? 44 : 54, won ? '#ffe14d' : '#ff6b6b', 9)).setOrigin(0.5);
-    const e = ERAS[this.era];
-    const icon = this.add.image(0, 380, 'weapon_' + e.key).setScale(0.55);
-    const eraT = this.add.text(0, 455, `Reached: ${e.name}`, style(26, col(e.ui === 0x29d8ff ? 0x29f0ff : 0xffffff), 6)).setOrigin(0.5);
-    const pct = Math.round(Phaser.Math.Clamp(this.d / this.level.finish, 0, 1) * 100);
-    const lines = [
-      ['Enemies defeated', this.stats.kills],
-      ['Blocks smashed', this.stats.blocks],
-      ['Gates taken', this.stats.gates],
-      [won ? 'Health left' : 'Distance', won ? `${Math.ceil(this.hp)}` : `${pct}%`],
-      ['Time', `${this.time.toFixed(1)}s`],
-    ];
-    c.add([dim, g, title, icon, eraT]);
-    lines.forEach(([k, v], i) => {
-      c.add(this.add.text(-190, 505 + i * 34, k, style(20, '#d0d0d0', 0)).setOrigin(0, 0.5));
-      c.add(this.add.text(190, 505 + i * 34, String(v), style(22, '#ffffff', 0)).setOrigin(1, 0.5));
-    });
-    this.makeButton(c, 715, won ? 'PLAY AGAIN' : 'RETRY', () => this.startRun());
-    c.setAlpha(0);
-    this.tweens.add({ targets: c, alpha: 1, duration: 350 });
+  projectPt(x, z) { return project(x, z); }
+
+  addCoins(n, o) {
+    this.runCoins += n;
+    if (this.simulating || !o) return;
+    const pr = project(o.x, Math.max(o.z, 0));
+    const k = Math.min(n, 12);
+    for (let i = 0; i < k; i++) {
+      const coin = this.add.image(pr.x + (Math.random() - 0.5) * 40 * Math.max(pr.s, 0.5), pr.y - 50 * pr.s, 'coin').setScale(0.8).setDepth(8700);
+      this.tweens.add({ targets: coin, x: 250, y: 34 + (this.hudY || 0), scale: 0.5, duration: 550 + i * 45, delay: i * 30, ease: 'Cubic.easeIn',
+        onComplete: () => { coin.destroy(); Sound.play('coin'); this.coinPulse(); } });
+    }
   }
 
-  win() { this.endScreen(true); }
-  lose() { if (this.mode === 'play') this.endScreen(false); }
+  coinPulse() {
+    this.coinText.setScale(1.3);
+    this.tweens.add({ targets: this.coinText, scale: 1, duration: 150 });
+  }
+
+  burst(x, y, color, n = 10) {
+    for (let i = 0; i < n; i++) {
+      const dot = this.add.image(x, y, 'dot').setTint(i % 3 ? color : 0xffffff).setScale(0.6 + Math.random() * 0.8).setDepth(8000);
+      const a = Math.random() * Math.PI * 2, r = 50 + Math.random() * 90;
+      this.tweens.add({ targets: dot, x: x + Math.cos(a) * r, y: y + Math.sin(a) * r, alpha: 0, scale: 0.1, duration: 550, onComplete: () => dot.destroy() });
+    }
+  }
+
+  finishRun(won) {
+    if (this.mode !== 'play') return;
+    const raw = Math.round(this.runCoins * this.mods.coinMul);
+    const coins = won ? raw : Math.ceil(raw / 2);
+    const best = Save.data.best;
+    const newBest = this.era > best.era;
+    Save.data.coins += coins;
+    best.era = Math.max(best.era, this.era);
+    best.runs++;
+    if (won) { best.wins++; best.bossKills[this.boss.era]++; }
+    best.bestCoins = Math.max(best.bestCoins, coins);
+    if (!this.noSave) Save.write();
+    this.stats.coins = coins;
+    const pct = Math.round(Phaser.Math.Clamp(this.d / this.level.finish, 0, 1) * 100);
+    this.lastResult = { won, era: this.era, coins, coinsRaw: raw, kills: this.stats.kills, blocks: this.stats.blocks, gates: this.stats.gates, hp: this.hp,
+      time: this.time, pct, bossName: this.boss?.def.name, bossTime: this.stats.bossTime || 0, newBest };
+    this.mode = won ? 'won' : 'lost';
+    this.dragging = false;
+    this.bprojs.forEach((p) => p.img?.destroy());
+    this.bprojs = [];
+    this.bossWarns = [];
+    this.showBossBar(false);
+    if (this.simulating) return;
+    Sound.play(won ? 'win' : 'lose');
+    Sound.setSong('run');
+    this.showEnd(this.lastResult);
+  }
+
+  win() { this.finishRun(true); }
+  lose() { this.finishRun(false); }
 
   // ------------------------------------------------------------------ bot + test hooks
   botSteer(dt) {
@@ -743,6 +773,7 @@ export class GameScene extends Phaser.Scene {
     this.botT = (this.botT || 0) - dt;
     if (casual && this.botT > 0) return;
     this.botT = human ? 0.7 : casual ? 0.45 : 0;
+    if (this.boss) { this.botBoss(human, casual); return; }
     const gates = this.objs.filter((o) => o.type === 'gate' && !o.dead && !o.pair.used && o.z > 0 && o.z < 1000);
     if (gates.length) {
       const pair = gates[0].pair;
@@ -768,6 +799,23 @@ export class GameScene extends Phaser.Scene {
     this.tx = Phaser.Math.Clamp(target, -MAX_X, MAX_X);
   }
 
+  // During the boss: move out of telegraphed lanes; otherwise stay roughly in front of the boss.
+  botBoss(human, casual) {
+    const b = this.boss;
+    const threat = (x) => this.bossWarns.some((w) => Math.abs(w.x - x) < 90) || this.bprojs.some((p) => Math.abs(p.x - x) < 80) || (b.charge && Math.abs(b.charge.lane - x) < 100);
+    const lanes = LANES.filter((l) => !threat(l));
+    const here = LANES.reduce((a, l) => (Math.abs(l - this.px) < Math.abs(a - this.px) ? l : a));
+    if (threat(this.px)) {
+      const miss = human ? 0.32 : casual ? 0.15 : 0; // didn't notice / froze
+      if (Math.random() < miss) return;
+      const pick = lanes.sort((a, c) => Math.abs(a - b.obj.x) - Math.abs(c - b.obj.x))[human ? Math.floor(Math.random() * lanes.length) : 0];
+      if (pick !== undefined) this.tx = pick;
+    } else if (!threat(here)) {
+      const aim = Phaser.Math.Clamp(b.obj.x + (human ? (Math.random() - 0.5) * 160 : 0), -MAX_X, MAX_X);
+      if (!threat(aim)) this.tx = aim;
+    }
+  }
+
   exposeHooks() {
     const s = this;
     window.__ER = Object.assign(window.__ER || {}, {
@@ -775,10 +823,36 @@ export class GameScene extends Phaser.Scene {
       ready: true,
       start: () => s.startRun(),
       setBot: (b) => { s.bot = b; },
-      state: () => ({ mode: s.mode, era: s.era, eraName: ERAS[s.era].name, xp: s.xp, hp: s.hp, d: s.d, finish: s.level.finish, time: s.time,
+      // testing/screenshots: skip to the boss arena with the weapon in a given era
+      jumpToBoss: (era, boosts = { rate: 40, dmg: 40, extra: 2 }) => {
+        s.closeScreen(); s.mode = 'won'; s.startRun();
+        s.objs.forEach((o) => { o.dead = true; });
+        s.qi = s.level.items.length;
+        s.era = era; s.xp = 0;
+        s.rateB = boosts.rate; s.dmgB = boosts.dmg; s.extra = boosts.extra;
+        s.setEraVisuals(era, true);
+        s.weaponImg.setTexture('weapon_' + ERAS[era].key);
+        s.d = s.level.finish - 125;
+        s.updateHud(true);
+      },
+      save: Save,
+      // balance testing: override upgrade levels for the next runs without touching the save
+      setTestUpgrades: (u, noSave = true) => { s.testUpg = u; s.noSave = noSave; },
+      // page coordinates of a named UI button (for tests)
+      uiPoint: (name) => {
+        const z = s.ui[name];
+        if (!z || !z.active) return null;
+        const m = z.getWorldTransformMatrix();
+        const cam = s.cameras.main;
+        const r = s.game.canvas.getBoundingClientRect();
+        const k = r.width / s.scale.gameSize.width;
+        return { x: r.x + (m.tx - cam.worldView.x) * cam.zoom * k, y: r.y + (m.ty - cam.worldView.y) * cam.zoom * k };
+      },
+      state: () => ({ mode: s.mode, boss: s.boss ? { name: s.boss.def.name, hp: s.boss.hp, maxHp: s.boss.maxHp, phase: s.boss.phase, t: s.boss.t } : null, coins: s.runCoins, savedCoins: Save.data.coins, maxHp: s.maxHp, era: s.era, eraName: ERAS[s.era].name, xp: s.xp, hp: s.hp, d: s.d, finish: s.level.finish, time: s.time,
         rate: s.rate, dmg: s.dmg, shots: s.shots, stats: { ...s.stats }, eraTimes: [...s.eraTimes], objs: s.objs.length, projs: s.projs.length }),
       // fast-forward the simulation (headless) with the current bot steering
       sim: (seconds, opts = {}) => {
+        const wasPlaying = s.mode === 'play';
         s.simulating = !opts.visual;
         const steps = Math.round(seconds * 60);
         for (let i = 0; i < steps && s.mode === 'play'; i++) { if (s.bot) s.botSteer(1 / 60); s.step(1 / 60); }
@@ -786,8 +860,11 @@ export class GameScene extends Phaser.Scene {
         s.setEraVisuals(s.era, true);
         s.weaponImg.setTexture('weapon_' + ERAS[s.era].key);
         s.updateHud(true);
+        if (wasPlaying && !opts.visual && s.mode !== 'play' && s.lastResult) s.showEnd(s.lastResult);
         return window.__ER.state();
       },
     });
   }
 }
+
+Object.assign(GameScene.prototype, BossMethods, ScreenMethods);
