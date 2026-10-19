@@ -1,5 +1,7 @@
 import Phaser from 'phaser';
 import { ERAS, WEAPONS } from './eras.js';
+import { levelInfo } from './level.js';
+import { BOSSES } from './bosses.js';
 import { UPGRADES, upgCost } from './upgrades.js';
 import { Save } from './save.js';
 import { Sound } from './audio.js';
@@ -61,30 +63,34 @@ export const ScreenMethods = {
     this.gearButton(c, 'title');
     const t1 = this.add.text(0, 215, 'ERA', style(96, '#ffe14d', 14)).setOrigin(0.5);
     const t2 = this.add.text(0, 303, 'RUNNER', style(84, '#ffffff', 14)).setOrigin(0.5);
-    const sub = this.add.text(0, 372, 'Evolve your weapon from the\nStone Age to the Future!', style(21, '#ffffff', 5)).setOrigin(0.5);
+    const sub = this.add.text(0, 368, 'Fight your way from the\nStone Age to the Future!', style(21, '#ffffff', 5)).setOrigin(0.5);
     c.add([t1, t2, sub]);
+    // level select: PLAY starts the picked level (default: the highest unlocked one)
+    const maxLv = Save.data.level;
+    this.selLevel = Phaser.Math.Clamp(this.selLevel || maxLv, 1, maxLv);
+    const L = levelInfo(this.selLevel);
+    const E = ERAS[L.era];
     const row = this.add.graphics();
-    row.fillStyle(0x000000, 0.4).fillRoundedRect(-256, 410, 512, 106, 20);
+    row.fillStyle(0x000000, 0.45).fillRoundedRect(-256, 404, 512, 176, 22);
+    row.lineStyle(3, E.ui, 1).strokeRoundedRect(-256, 404, 512, 176, 22);
     c.add(row);
-    // 12 weapons: one column per era, its two weapons side by side, era name underneath
-    const bestTier = Save.data.best.tier;
-    const short = ['STONE', 'BRONZE', 'MEDIEVAL', 'GUNPOWDER', 'MODERN', 'FUTURE'];
-    ERAS.forEach((e, i) => {
-      const x = -213 + i * 85.2;
-      for (let j = 0; j < 2; j++) {
-        const t = i * 2 + j;
-        c.add(this.add.image(x - 17 + j * 34, 450, 'weapon_' + WEAPONS[t].key).setScale(0.165).setAlpha(t <= bestTier || t === 0 ? 1 : 0.45));
-      }
-      c.add(this.add.text(x, 498, short[i], style(11, col(e.ui), 3)).setOrigin(0.5));
-      if (i < 5) c.add(this.add.text(x + 42.6, 452, '›', style(26, '#ffe14d', 4)).setOrigin(0.5));
-    });
+    c.add(this.add.text(0, 438, `LEVEL ${this.selLevel}`, style(44, '#ffffff', 9)).setOrigin(0.5));
+    c.add(this.add.text(0, 478, E.name + (L.loop ? `  ·  LOOP ${L.loop + 1}` : ''), style(20, col(E.ui === 0x29d8ff ? 0x29f0ff : E.ui), 5)).setOrigin(0.5));
+    c.add(this.add.image(-46, 525, 'weapon_' + WEAPONS[L.era * 2].key).setScale(0.2));
+    c.add(this.add.text(0, 527, '›', style(28, '#ffe14d', 4)).setOrigin(0.5));
+    c.add(this.add.image(46, 525, 'weapon_' + WEAPONS[L.era * 2 + 1].key).setScale(0.2));
+    const beaten = this.selLevel < maxLv;
+    c.add(this.add.text(0, 563, `BOSS: ${BOSSES[L.era].name}${beaten ? '   ✓ BEATEN' : ''}`, style(14, beaten ? '#7dff9a' : '#ffb3ab', 3)).setOrigin(0.5));
+    const pick = (d) => { const n = this.selLevel + d; if (n < 1 || n > maxLv) { Sound.play('deny'); return; } Sound.play('click'); this.selLevel = n; this.showTitle(); };
+    makeBtn(this, c, -205, 490, 62, 70, '◀', { shade: this.selLevel > 1 ? 'blue' : 'gray', size: 30, name: 'levelPrev', cb: () => pick(-1) });
+    makeBtn(this, c, 205, 490, 62, 70, '▶', { shade: this.selLevel < maxLv ? 'blue' : 'gray', size: 30, name: 'levelNext', cb: () => pick(1) });
     const b = Save.data.best;
-    const bestLine = b.runs ? `BEST: ${b.tier >= 0 ? WEAPONS[b.tier].name.toUpperCase() : '-'}   WINS: ${b.wins}   BOSSES: ${b.bossKills.reduce((a, v) => a + v, 0)}` : 'Beat the boss at the end to win!';
-    c.add(this.add.text(0, 530, bestLine, style(17, '#ffe9b0', 4)).setOrigin(0.5));
-    const how = this.add.text(0, 610,
-      'DRAG left / right to steer\nDefeat enemies for XP and COINS\nSteer through GREEN gates (shoot red ones!)\nDodge the boss\'s red lanes', style(18, '#ffffff', 5, { lineSpacing: 6 })).setOrigin(0.5);
+    const bestLine = `UNLOCKED: LEVEL ${maxLv}${b.runs ? `   WINS: ${b.wins}` : ''}`;
+    c.add(this.add.text(0, 604, bestLine, style(17, '#ffe9b0', 4)).setOrigin(0.5));
+    const how = this.add.text(0, 662,
+      'DRAG to steer  ·  grab GEMS for XP + power-ups\nRun through CHECKPOINTS  ·  dodge the boss!', style(17, '#ffffff', 5, { lineSpacing: 6, align: 'center' })).setOrigin(0.5);
     c.add(how);
-    makeBtn(this, c, 0, 745, 310, 86, 'PLAY', { size: 40, pulse: true, name: 'play', cb: () => { Sound.play('click'); this.startRun(); } });
+    makeBtn(this, c, 0, 745, 310, 86, `PLAY`, { size: 40, pulse: true, name: 'play', cb: () => { Sound.play('click'); this.startRun(this.selLevel); } });
     const shop = makeBtn(this, c, 0, 845, 310, 72, 'UPGRADES', { shade: 'gold', size: 30, name: 'shop', cb: () => { Sound.play('click'); this.showShop('title'); } });
     if (this.canAffordSomething()) this.badge(c, 140, 815);
     this.screenTweens.push(this.tweens.add({ targets: [t1, t2], y: '-=8', yoyo: true, repeat: -1, duration: 1200, ease: 'Sine.easeInOut' }));
@@ -203,16 +209,23 @@ export const ScreenMethods = {
     g.lineStyle(5, r.won ? 0xffe14d : 0xff5a4f, 1).strokeRoundedRect(-240, 205, 480, 650, 28);
     c.add(g);
     this.gearButton(c, 'end', 196, 249);
-    c.add(this.add.text(0, 255, r.won ? 'VICTORY!' : 'DEFEATED', style(r.won ? 52 : 54, r.won ? '#ffe14d' : '#ff6b6b', 9)).setOrigin(0.5));
-    const sub = r.won ? `You beat the ${r.bossName}!` : r.bossName ? `The ${r.bossName} got you` : `Fell at ${r.pct}% of the track`;
+    c.add(this.add.text(r.won ? -18 : 0, 255, r.won ? `LEVEL ${r.level} COMPLETE!` : 'DEFEATED', style(r.won ? 33 : 54, r.won ? '#ffe14d' : '#ff6b6b', 8)).setOrigin(0.5));
+    const sub = r.won ? `You beat the ${r.bossName}!` : r.bossName ? `Level ${r.level}: the ${r.bossName} got you` : `Level ${r.level}: fell at ${r.pct}% of the track`;
     c.add(this.add.text(0, 300, sub, style(19, '#ffffff', 4)).setOrigin(0.5));
     const e = ERAS[r.era];
     const w = WEAPONS[r.tier ?? r.era * 2];
-    c.add(this.add.image(-150, 372, 'weapon_' + w.key).setScale(0.34));
-    c.add(this.add.text(-95, 344, 'REACHED', style(15, '#bbbbbb', 0)).setOrigin(0, 0.5));
-    c.add(this.add.text(-95, 372, e.name, style(28, col(e.ui === 0x29d8ff ? 0x29f0ff : 0xffffff), 6)).setOrigin(0, 0.5));
-    c.add(this.add.text(-95, 401, w.name.toUpperCase(), style(16, '#ffe9b0', 3)).setOrigin(0, 0.5));
-    if (r.newBest) c.add(this.add.text(-95, 424, 'NEW BEST WEAPON!', style(14, '#7dff9a', 3)).setOrigin(0, 0.5));
+    c.add(this.add.image(-150, 360, 'weapon_' + w.key).setScale(0.34));
+    c.add(this.add.text(-95, 334, 'REACHED', style(15, '#bbbbbb', 0)).setOrigin(0, 0.5));
+    c.add(this.add.text(-95, 361, e.name, style(28, col(e.ui === 0x29d8ff ? 0x29f0ff : 0xffffff), 6)).setOrigin(0, 0.5));
+    c.add(this.add.text(-95, 389, w.name.toUpperCase(), style(16, '#ffe9b0', 3)).setOrigin(0, 0.5));
+    if (r.unlocked) {
+      const U = levelInfo(r.unlocked);
+      const ug = this.add.graphics();
+      ug.fillStyle(0x2fbf62, 0.3).fillRoundedRect(-200, 409, 400, 30, 12);
+      ug.lineStyle(2, 0x7dff9a, 1).strokeRoundedRect(-200, 409, 400, 30, 12);
+      c.add(ug);
+      c.add(this.add.text(0, 424, `LEVEL ${r.unlocked} UNLOCKED: ${ERAS[U.era].name}`, style(17, '#7dff9a', 4)).setOrigin(0.5));
+    } else if (r.newBest) c.add(this.add.text(-95, 424, 'NEW BEST WEAPON!', style(14, '#7dff9a', 3)).setOrigin(0, 0.5));
     // coins earned
     const cg = this.add.graphics();
     cg.fillStyle(0x000000, 0.45).fillRoundedRect(-210, 440, 420, 92, 18);
@@ -225,7 +238,7 @@ export const ScreenMethods = {
     this.screenTweens.push(this.tweens.addCounter({ from: 0, to: r.coins, duration: 900, delay: 250, onUpdate: (tw) => { if (coinT.active) coinT.setText('+' + fmt(tw.getValue())); } }));
     const lines = [
       ['Enemies defeated', r.kills],
-      ['Gates taken', r.gates],
+      ['Power-ups', (r.powerups || []).reduce((a, [, n]) => a + n, 0)],
       [r.won ? 'Boss fight' : 'Distance', r.won ? `${r.bossTime.toFixed(1)}s` : `${r.pct}%`],
       ['Run time', `${r.time.toFixed(1)}s`],
     ];
@@ -233,9 +246,11 @@ export const ScreenMethods = {
       c.add(this.add.text(-195, 565 + i * 31, k, style(19, '#d0d0d0', 0)).setOrigin(0, 0.5));
       c.add(this.add.text(195, 565 + i * 31, String(v), style(20, '#ffffff', 0)).setOrigin(1, 0.5));
     });
-    makeBtn(this, c, 0, 718, 300, 76, r.won ? 'PLAY AGAIN' : 'RETRY', { size: 34, pulse: true, name: 'play', cb: () => { Sound.play('click'); this.startRun(); } });
-    makeBtn(this, c, 0, 805, 300, 60, 'UPGRADES', { shade: 'gold', size: 26, name: 'shop', cb: () => { Sound.play('click'); this.showShop('end'); } });
-    if (this.canAffordSomething()) this.badge(c, 140, 780);
+    const next = r.won ? r.level + 1 : r.level;
+    makeBtn(this, c, 0, 718, 300, 76, r.won ? 'NEXT LEVEL' : 'RETRY', { size: 34, pulse: true, name: 'play', cb: () => { Sound.play('click'); this.startRun(next); } });
+    makeBtn(this, c, -78, 805, 206, 60, 'UPGRADES', { shade: 'gold', size: 22, name: 'shop', cb: () => { Sound.play('click'); this.showShop('end'); } });
+    makeBtn(this, c, 116, 805, 150, 60, 'MENU', { shade: 'blue', size: 22, name: 'menu', cb: () => { Sound.play('click'); this.selLevel = next; this.showTitle(); } });
+    if (this.canAffordSomething()) this.badge(c, 18, 780);
   },
 };
 

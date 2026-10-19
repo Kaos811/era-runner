@@ -1,6 +1,6 @@
 // Permanent upgrades bought in the shop with coins. Applied at the start of every run.
-// Head Start: starting XP per level (the weapon steps cost 15, 25, 40, 70, 120, 190, 300 ... XP)
-export const HEAD_XP = [0, 60, 140, 250, 400, 600, 850];
+// Head Start: each level starts with this share of the XP needed for the era's second weapon
+export const HEAD_PCT = [0, 10, 20, 30, 40, 50, 60];
 
 export const UPGRADES = [
   { key: 'dmg', name: 'SHARPER WEAPONS', icon: 'icon_dmg', max: 10, base: 60, growth: 1.5, per: 10,
@@ -10,7 +10,7 @@ export const UPGRADES = [
   { key: 'hp', name: 'TOUGH HIDE', icon: 'icon_hp', max: 8, base: 50, growth: 1.55, per: 15,
     effect: (l) => `${100 + l * 15} max health` },
   { key: 'xp', name: 'HEAD START', icon: 'icon_xp', max: 6, base: 80, growth: 1.6,
-    effect: (l) => (l ? `start with ${HEAD_XP[l]} XP` : 'start with 0 XP') },
+    effect: (l) => (l ? `start ${HEAD_PCT[l]}% to weapon 2` : 'start with 0 XP') },
   { key: 'coin', name: 'LUCKY COINS', icon: 'icon_coin', max: 5, base: 100, growth: 1.7, per: 15,
     effect: (l) => (l ? `+${l * 15}% coins` : 'no bonus') },
 ];
@@ -23,7 +23,7 @@ export function runMods(upg) {
     dmgMul: 1 + 0.1 * (upg.dmg || 0),
     rateMul: 1 + 0.08 * (upg.rate || 0),
     maxHp: 100 + 15 * (upg.hp || 0),
-    startXp: HEAD_XP[Math.min(upg.xp || 0, HEAD_XP.length - 1)],
+    startXpFrac: HEAD_PCT[Math.min(upg.xp || 0, HEAD_PCT.length - 1)] / 100,
     coinMul: 1 + 0.15 * (upg.coin || 0),
   };
 }

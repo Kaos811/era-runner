@@ -10,12 +10,12 @@ import { Sound } from './audio.js';
 //   beam    - a breath/laser strip down a lane
 // Every boss also raises a shield (immune to damage) at 2/3 and 1/3 health.
 export const BOSSES = [
-  { name: 'WOOLLY MAMMOTH', tex: 'boss_stone', proj: 'bp_rock', attacks: ['volley', 'charge', 'volley', 'volley2'], coins: 20 },
-  { name: 'CHARIOT CHAMPION', tex: 'boss_bronze', proj: 'bp_spear', attacks: ['charge', 'volley2', 'volley', 'charge'], coins: 30 },
-  { name: 'CASTLE DRAGON', tex: 'boss_medieval', proj: 'bp_fire', attacks: ['beam', 'volley', 'barrage', 'volley2'], beam: 0xff7a1f, coins: 40 },
-  { name: 'PIRATE GALLEON', tex: 'boss_gunpowder', proj: 'bp_ball', attacks: ['volley2', 'barrage', 'volley', 'volley2'], coins: 55 },
-  { name: 'IRON TANK', tex: 'boss_modern', proj: 'bp_shell', attacks: ['barrage', 'charge', 'volley2', 'volley'], coins: 70 },
-  { name: 'MEGA ROBOT', tex: 'boss_future', proj: 'bp_plasma', attacks: ['beam', 'barrage', 'volley2', 'charge'], beam: 0x29f0ff, coins: 90 },
+  { name: 'WOOLLY MAMMOTH', tex: 'boss_stone', hp: 1.15, proj: 'bp_rock', attacks: ['volley', 'charge', 'volley', 'volley2'], coins: 20 },
+  { name: 'CHARIOT CHAMPION', tex: 'boss_bronze', hp: 1.2, proj: 'bp_spear', attacks: ['charge', 'volley2', 'volley', 'charge'], coins: 30 },
+  { name: 'CASTLE DRAGON', tex: 'boss_medieval', hp: 0.9, proj: 'bp_fire', attacks: ['beam', 'volley', 'barrage', 'volley2'], beam: 0xff7a1f, coins: 40 },
+  { name: 'PIRATE GALLEON', tex: 'boss_gunpowder', hp: 1.0, proj: 'bp_ball', attacks: ['volley2', 'barrage', 'volley', 'volley2'], coins: 55 },
+  { name: 'IRON TANK', tex: 'boss_modern', hp: 1.15, proj: 'bp_shell', attacks: ['barrage', 'charge', 'volley2', 'volley'], coins: 70 },
+  { name: 'MEGA ROBOT', tex: 'boss_future', hp: 1.25, proj: 'bp_plasma', attacks: ['beam', 'barrage', 'volley2', 'charge'], beam: 0x29f0ff, coins: 90 },
 ];
 
 export const LANES = [-150, 0, 150];
@@ -23,10 +23,10 @@ export const BOSS_HOME_Z = 450;
 // Boss HP: players arrive with wildly different firepower (gates stack), so HP meets them halfway -
 // the geometric mean of the player's DPS and a reference DPS for that era. A stronger weapon
 // (better gates, upgrades) still finishes the fight faster, a weak one isn't stuck forever.
-export const BOSS_SECONDS = 15;
+export const BOSS_SECONDS = 13;
 // a typical player arrives with ~37x their weapon's base DPS (gates + extra shots)
 const REF_BOOST = 37;
-const DMG = { proj: 25, charge: 35, beam: 30 };
+const DMG = { proj: 28, charge: 38, beam: 33 }; // x level damage multiplier (loops)
 const laneOf = (x) => LANES.reduce((a, b) => (Math.abs(b - x) < Math.abs(a - x) ? b : a));
 
 export const bossHpFor = (tier, playerDps) => {
@@ -48,14 +48,17 @@ export const BossMethods = {
     shield.lineStyle(12, 0xbff6ff, 0.9).strokeEllipse(0, -225, 600, 520);
     shield.setAlpha(0);
     c.add([sh, img, shield]);
-    const hp = bossHpFor(this.tier, this.rate * this.dmg * this.shots);
+    // power-ups add damage on top of the base volley; count them in roughly
+    const P = this.pu;
+    const puBoost = (1 + P.double) * (1 + 0.25 * P.explode + 0.2 * P.chain) + (P.drone * 2.6 * 1.6) / Math.max(1, this.rate * this.shots) + (P.blades ? 0.3 : 0);
+    const hp = Math.round(bossHpFor(this.tier, this.rate * this.dmg * this.shots * puBoost) * this.info.bossMul * (def.hp || 1));
     const obj = { type: 'boss', c, img, shield, x: 0, z: 1750, halfW: 170, hittable: true, size: 2, eraLook: era };
     this.objs.push(obj);
     this.boss = { def, era, obj, hp, maxHp: hp, t: 0, phase: 'enter', nextAt: 0, busy: 0, events: [], shields: [0.66, 0.33], shieldUntil: 0, charge: null, attackIdx: 0, startTime: this.time };
     this.bossWarns = [];
     this.bprojs = [];
     this.stats.bossName = def.name;
-    this.stats.bossDps = this.rate * this.dmg * this.shots;
+    this.stats.bossDps = this.rate * this.dmg * this.shots * puBoost;
     if (this.simulating) return;
     Sound.setSong('boss');
     Sound.play('boss_roar');
@@ -90,7 +93,7 @@ export const BossMethods = {
         o.z -= 1500 * dt;
         if (!ch.hitDone && o.z < 200) {
           ch.hitDone = true;
-          if (Math.abs(this.px - o.x) < 100) this.bossHurt(DMG.charge);
+          if (Math.abs(this.px - o.x) < 100) this.bossHurt(DMG.charge * this.info.dmgMul);
           if (!this.simulating) this.cameras.main.shake(220, 0.012);
         }
         if (o.z <= 150) { o.z = 150; ch.phase = 'back'; }
@@ -108,14 +111,14 @@ export const BossMethods = {
       p.spin += dt * 8;
       if (p.z <= 25) {
         p.dead = true;
-        if (Math.abs(this.px - p.x) < 72) this.bossHurt(DMG.proj);
+        if (Math.abs(this.px - p.x) < 72) this.bossHurt(DMG.proj * this.info.dmgMul);
         else if (!this.simulating) Sound.play('block');
       }
     }
     this.bprojs = this.bprojs.filter((p) => { if (p.dead) p.img?.destroy(); return !p.dead; });
     // active beams hurt once
     for (const w of this.bossWarns) {
-      if (w.kind === 'beam' && b.t >= w.from && !w.hitDone && Math.abs(this.px - w.x) < 82) { w.hitDone = true; this.bossHurt(DMG.beam); }
+      if (w.kind === 'beam' && b.t >= w.from && !w.hitDone && Math.abs(this.px - w.x) < 82) { w.hitDone = true; this.bossHurt(DMG.beam * this.info.dmgMul); }
     }
     this.bossWarns = this.bossWarns.filter((w) => w.until > b.t);
   },
@@ -182,12 +185,12 @@ export const BossMethods = {
   bossHit(p) {
     const b = this.boss;
     if (b.phase !== 'fight' && b.phase !== 'enter') return;
-    if (b.shieldUntil) { if (!this.simulating) Sound.play('block'); return; }
+    if (b.shieldUntil) { if (!this.simulating && !p.noFx) Sound.play('block'); return; }
     const dealt = Math.min(p.dmg, b.hp);
     b.hp -= dealt;
     this.stats.damage += dealt;
     b.obj.flash = 0.05;
-    if (!this.simulating) Sound.play('hit');
+    if (!this.simulating && !p.noFx) Sound.play('hit');
     const frac = b.hp / b.maxHp;
     if (b.shields.length && frac <= b.shields[0] && b.hp > 0) {
       b.shields.shift();
@@ -208,7 +211,7 @@ export const BossMethods = {
     b.obj.hittable = false;
     this.stats.bossTime = this.time - b.startTime;
     this.stats.bossBeaten = true;
-    this.addCoins(b.def.coins, b.obj);
+    this.addCoins(this.levelCoins(b.def.coins), b.obj);
     if (this.simulating) return;
     Sound.play('boss_die');
     this.cameras.main.shake(600, 0.015);
@@ -236,7 +239,7 @@ export const BossMethods = {
     const b = this.boss;
     if (!b || !this.bossBar?.c.visible) return;
     const { c, g, name, hpt } = this.bossBar;
-    c.y = (this.hudY || 0) + 218;
+    c.y = (this.hudY || 0) + 258;
     const f = Math.max(0, b.hp / b.maxHp);
     name.setText(b.def.name + (b.shieldUntil ? '  (SHIELD)' : ''));
     hpt.setText(`${Math.ceil(b.hp)} / ${b.maxHp}`);
@@ -248,7 +251,7 @@ export const BossMethods = {
   },
 
   bossBanner(nameText) {
-    const c = this.add.container(270, (this.hudY || 0) + 330).setDepth(8600);
+    const c = this.add.container(270, (this.hudY || 0) + 370).setDepth(8600);
     const g = this.add.graphics();
     g.fillStyle(0x000000, 0.6).fillRoundedRect(-240, -60, 480, 120, 22);
     g.lineStyle(4, 0xe5483d, 1).strokeRoundedRect(-240, -60, 480, 120, 22);

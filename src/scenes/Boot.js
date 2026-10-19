@@ -482,6 +482,50 @@ function bosses(scene) {
   make(scene, 'bp_plasma', 44, 44, (p) => { p.fill(0xff4fd8, 0.35).circle(22, 22, 22); p.fill(0xff4fd8).circle(22, 22, 13); p.fill(0xffffff).circle(22, 22, 6); });
 }
 
+// checkpoint arch, power-up icons (48x48) and power-up sprites
+function powerupArt(scene) {
+  make(scene, 'checkpoint', 520, 380, (p) => {
+    const cols = [0xd9dde3, 0x4cd964, 0x3a8dff, 0xb052ff, 0xffc21a];
+    p.fill(0x2b2f45).rrect(8, 60, 46, 320, 12).rrect(466, 60, 46, 320, 12);
+    cols.forEach((c, i) => { p.fill(c).rect(14, 330 - i * 52, 34, 40).rect(472, 330 - i * 52, 34, 40); });
+    p.fill(0x1b1f2e).rrect(0, 0, 520, 92, 22); p.line(6, 0xffc21a).srrect(3, 3, 514, 86, 20);
+    cols.forEach((c, i) => p.fill(c).rect(40 + i * 88, 72, 88, 8));
+    p.fill(0xffffff, 0.12).rect(54, 92, 412, 288);
+  });
+  const I = (key, draw) => make(scene, key, 48, 48, draw);
+  const sword = (p, c) => { p.fill(c).poly([[34, 4], [44, 4], [44, 14], [18, 40], [8, 30]]); p.fill(0x8b5a2b).rrect(4, 34, 12, 10, 3); p.fill(0xf0b429).poly([[6, 26], [22, 42], [18, 46], [2, 30]]); };
+  const bolt = (p, c) => p.fill(c).poly([[28, 2], [8, 28], [22, 28], [16, 46], [40, 18], [26, 18]]);
+  I('pu_dmg', (p) => sword(p, 0xe9edf2));
+  I('pu_rate', (p) => bolt(p, 0xe9edf2));
+  I('pu_heal', (p) => { p.fill(0xff3b5c).circle(15, 17, 12).circle(33, 17, 12).tri(4, 22, 44, 22, 24, 44); p.fill(0xffffff).rect(21, 12, 6, 20).rect(14, 19, 20, 6); });
+  I('pu_dmg2', (p) => { sword(p, 0x7dff9a); p.fill(0x4cd964).tri(38, 26, 46, 38, 30, 38); });
+  I('pu_rate2', (p) => { bolt(p, 0x7dff9a); p.fill(0x4cd964).tri(38, 30, 46, 42, 30, 42); });
+  I('pu_shot', (p) => { p.fill(0x4cd964); [10, 24, 38].forEach((x) => p.rrect(x - 4, 10, 8, 26, 4)); p.fill(0xffffff).rect(18, 39, 12, 4).rect(22, 35, 4, 12); });
+  I('pu_magnet', (p) => { p.line(10, 0xe5483d).spoly([[10, 6], [10, 26], [16, 36], [24, 40], [32, 36], [38, 26], [38, 6]]); p.fill(0xd9dde3).rect(5, 2, 10, 8).rect(33, 2, 10, 8); });
+  I('pu_pierce', (p) => { p.fill(0x7ab8ff).poly([[4, 24], [32, 20], [32, 12], [46, 24], [32, 36], [32, 28], [4, 28]]); p.line(3, 0xffffff).seg(18, 8, 18, 40); });
+  I('pu_shield', (p) => { p.fill(0x3a8dff).poly([[24, 2], [44, 10], [40, 32], [24, 46], [8, 32], [4, 10]]); p.fill(0x9fd0ff).poly([[24, 8], [38, 14], [35, 30], [24, 40]]); });
+  I('pu_big', (p) => { p.fill(0x3a8dff, 0.4).circle(24, 24, 22); p.fill(0x7ab8ff).circle(24, 24, 15); p.fill(0xffffff).circle(19, 19, 5); });
+  I('pu_chain', (p) => { p.fill(0xd29bff).poly([[30, 2], [10, 26], [22, 26], [14, 46], [40, 18], [27, 18], [36, 2]]); p.fill(0xffffff).circle(10, 26, 3).circle(40, 18, 3); });
+  I('pu_blades', (p) => { p.fill(0xb052ff).circle(24, 24, 7); for (let i = 0; i < 4; i++) { const a = (i * Math.PI) / 2; p.fill(0xe9edf2).tri(24 + Math.cos(a) * 6, 24 + Math.sin(a) * 6, 24 + Math.cos(a + 0.9) * 22, 24 + Math.sin(a + 0.9) * 22, 24 + Math.cos(a + 1.4) * 8, 24 + Math.sin(a + 1.4) * 8); } });
+  I('pu_boom', (p) => { const pts = []; for (let i = 0; i < 16; i++) { const r = i % 2 ? 10 : 22; const a = (i * Math.PI) / 8; pts.push([24 + Math.cos(a) * r, 24 + Math.sin(a) * r]); } p.fill(0xff7a1f).poly(pts); p.fill(0xffe14d).circle(24, 24, 8); });
+  I('pu_double', (p) => { p.fill(0xffc21a).rrect(8, 8, 10, 30, 5).rrect(30, 8, 10, 30, 5); p.fill(0xfff1a8).rrect(10, 10, 4, 12, 2).rrect(32, 10, 4, 12, 2); p.fill(0xffffff).tri(13, 0, 6, 10, 20, 10).tri(35, 0, 28, 10, 42, 10); });
+  I('pu_nova', (p) => { p.line(5, 0xffc21a).scircle(24, 24, 20); p.line(3, 0xfff1a8).scircle(24, 24, 12); p.fill(0xffffff).circle(24, 24, 5); });
+  I('pu_drone', (p) => { p.fill(0x8e9aa8).rrect(12, 18, 24, 14, 6); p.fill(0xffc21a).circle(24, 25, 4); p.line(3, 0x8e9aa8).seg(12, 20, 4, 12).seg(36, 20, 44, 12); p.fill(0x29f0ff).ellipse(4, 12, 12, 4).ellipse(44, 12, 12, 4); p.fill(0xffc21a).rect(22, 32, 4, 10); });
+  make(scene, 'blade', 64, 64, (p) => {
+    p.fill(0x6b2a9a).circle(32, 32, 9);
+    for (let i = 0; i < 4; i++) { const a = (i * Math.PI) / 2; p.fill(0xe9edf2).tri(32 + Math.cos(a) * 8, 32 + Math.sin(a) * 8, 32 + Math.cos(a + 0.9) * 31, 32 + Math.sin(a + 0.9) * 31, 32 + Math.cos(a + 1.5) * 10, 32 + Math.sin(a + 1.5) * 10); }
+    p.fill(0xd29bff).circle(32, 32, 5);
+  });
+  make(scene, 'drone', 90, 60, (p) => {
+    p.fill(0x29f0ff, 0.5).ellipse(16, 12, 30, 8).ellipse(74, 12, 30, 8);
+    p.line(4, 0x5a6270).seg(24, 26, 16, 12).seg(66, 26, 74, 12);
+    p.fill(0x5a6270).rrect(20, 20, 50, 26, 12); p.fill(0x8e9aa8).rrect(24, 22, 42, 16, 8);
+    p.fill(0xffc21a).circle(45, 33, 7); p.fill(0xffffff).circle(43, 31, 2.5); p.fill(0x3a3d43).rect(41, 44, 8, 14);
+  });
+  make(scene, 'p_drone', 12, 30, (p) => { p.fill(0xffc21a, 0.4).rrect(0, 0, 12, 30, 6); p.fill(0xffe14d).rrect(3, 2, 6, 26, 3); p.fill(0xffffff).rrect(4.5, 3, 3, 10, 1.5); });
+  make(scene, 'bubble', 200, 200, (p) => { p.fill(0x7fe8ff, 0.25).circle(100, 100, 98); p.line(6, 0xbff6ff, 0.9).scircle(100, 100, 94); p.fill(0xffffff, 0.5).ellipse(66, 56, 40, 20); });
+}
+
 function icons(scene) {
   make(scene, 'coin', 24, 24, (p) => { p.fill(0xb8860b).circle(12, 12, 12); p.fill(0xffd84d).circle(12, 12, 10); p.fill(0xf0b429).circle(12, 12, 7); p.fill(0xfff1a8).rrect(10, 6, 4, 12, 2); });
   make(scene, 'icon_dmg', 48, 48, (p) => { p.fill(0xd9dee3).poly([[24, 2], [32, 10], [16, 40], [8, 32]]); p.fill(0x8b5a2b).rrect(4, 34, 14, 10, 3); p.fill(0xf0b429).poly([[6, 26], [22, 42], [18, 46], [2, 30]]); p.fill(0xff5a4f).circle(38, 10, 7); });
@@ -498,6 +542,7 @@ export class BootScene extends Phaser.Scene {
     ERAS.forEach((e) => { enemy(this, e.key); block(this, e.key); });
     WEAPONS.forEach((w) => weapon(this, w.key));
     projectiles(this);
+    powerupArt(this);
     misc(this);
     bosses(this);
     icons(this);

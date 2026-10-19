@@ -12,10 +12,14 @@ and every enemy you defeat gives XP. Pick up the XP gems they drop to **upgrade 
 | Modern | Rifle | Machine Gun |
 | Future | Laser Pistol | Plasma Cannon |
 
-Each era changes the scenery, the enemies, the projectiles and the weapon's stats. Steer through green boost gates
-(+fire rate, +damage, +shots, +health) and avoid red ones; shooting a gate raises its value. At the end of the track
-(~85 s) the track stops and you fight a **boss that matches the era you reached**. Beat it to win.
-Health does not regenerate, so steering matters.
+**Levels by era (Stage 4):** each level is one era - L1 Stone / Woolly Mammoth, L2 Bronze / Chariot Champion,
+L3 Medieval / Castle Dragon, L4 Gunpowder / Pirate Galleon, L5 Modern / Iron Tank, L6 Future / Mega Robot.
+You start on the era's first weapon and earn the second with XP. Each level is ~65 s of track plus the boss;
+beating the boss unlocks the next level. After Level 6 the game loops back to the Stone Age as Level 7, 8, ...
+with tougher enemies and bosses (no cap) and bigger coin rewards. The title screen has a level select (◀ ▶) for replays.
+
+Steer through green boost gates (+fire rate, +damage, +shots, +health) and avoid red ones; shooting a gate raises
+its value. Health does not regenerate, so steering matters.
 
 **Play:** https://kaos811.github.io/era-runner/
 
@@ -50,6 +54,25 @@ Health does not regenerate, so steering matters.
   The weapon is locked in when the boss fight starts.
 - The HUD timeline shows 6 era icons with 2 pips each; the title screen shows all 12 weapons (unlocked ones lit).
 - Saves from Stage 2 load unchanged (same key; the data is migrated to version 2 in place).
+
+## Stage 4
+- **Levels by era** (see above), level counter on the HUD and title, highest level saved. Save v3 migration keeps
+  coins, upgrades and settings; an old save unlocks the level of the best era it reached (or the one after a beaten boss).
+- **Checkpoint power-ups.** XP gems also fill a CHECKPOINT meter with five rarity bands (Common grey, Uncommon green,
+  Rare blue, Epic purple, Legendary gold; later bands need more gems; the gem streak multiplies meter points too).
+  A CHECKPOINT arch crosses the track at ~47% and again just before the boss: the meter cashes out into a random
+  power-up from the highest band reached, shown with a colour-coded card flip and sound. Filling Legendary wraps
+  the meter back to Common (x2, x3 on the HUD); every full lap banks one Legendary, so a great run can earn several
+  power-ups at one checkpoint. Power-ups last the rest of the level, stack, work on the boss, and show as HUD icons.
+  The pool lives in `src/powerups.js`:
+  - Common: Sharpen (+10% dmg), Quick Draw (+10% rate), Bandage (heal 25)
+  - Uncommon: Power Up (+22% dmg), Frenzy (+22% rate), Extra Shot (+1 shot), Gem Magnet
+  - Rare: Piercing, Bubble Shield (blocks a hit, recharges in 8 s), Heavy Ammo (bigger, +20% dmg)
+  - Epic: Chain Lightning, Orbit Blades, Explosive Shots
+  - Legendary: Double Shot, Nova Blast (screen-clearing blast every few seconds), Drone Buddy
+- Gates halved (5 per level). Head Start upgrade now gives a % of the XP to weapon 2.
+- Balance: `node tests/tune4.mjs` runs fresh-save campaigns per bot (buys upgrades as it goes) and prints per-level
+  win rate, upgrades, coins, fight length and checkpoint rarity / loop stats. Screenshots: `node tests/screens-stage4.mjs`.
 
 ## Credits and licenses
 All art and audio are original and generated in code. There are **no third-party asset files**.

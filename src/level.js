@@ -1,21 +1,26 @@
-import { ERAS, tierDps, MAX_TIER } from './eras.js';
+import { ERAS, tierDps } from './eras.js';
 
-// Deterministic level layout. The track is split into 6 sections. Enemy HP in each section is
-// scaled to a reference weapon tier for that point of the track (SECTION_TIER - roughly where a
-// decent, not perfect, player is), and the XP needed for each weapon step rises (XP_STEPS), so
-// where you end up depends on how many XP gems you collect.
-export const SECTION = 4600;
-export const START = 900;
-// reference weapon tier per section (fractional = between two weapons)
-export const SECTION_TIER = [0.6, 2.0, 3.4, 4.8, 6.0, 7.2];
-export const sectionRef = (k) => {
-  const t = SECTION_TIER[k], i = Math.floor(t), f = t - i;
-  return tierDps(i) * (1 - f) + tierDps(Math.min(MAX_TIER, i + 1)) * f;
-};
-// XP cost of each weapon step (tier t -> t+1), tuned against the bots for this layout's total
-// enemy HP (2281). Later steps cost noticeably more; XP comes from gems you pick up (x1-x2 streak).
-export const XP_STEPS = [15, 25, 40, 70, 120, 190, 300, 460, 520, 400, 600];
-const XP_REF_TOTAL = 2281;
+// One level = one era. Level 1 Stone Age ... Level 6 Future, then Level 7+ loops back to the
+// Stone Age with tougher enemies and bosses (no cap). The player starts on the era's first weapon
+// and can earn the second one with XP. Halfway and right before the boss there is a CHECKPOINT
+// gate that cashes in the gem meter for power-ups (see powerups.js / checkpoint.js).
+export const START = 700;
+export const LEN = 21000;          // ~64 s of running at 330 units/s, plus the boss
+export const CHECKPOINT_AT = 0.47; // first checkpoint, as a share of the track
+
+export function levelInfo(n) {
+  n = Math.max(1, Math.floor(n));
+  const era = (n - 1) % 6;
+  const loop = Math.floor((n - 1) / 6);
+  return {
+    n, era, loop,
+    name: ERAS[era].name,
+    hpMul: Math.pow(1.7, loop),          // enemy HP
+    dmgMul: 1 + 0.35 * loop,             // enemy / boss damage
+    bossMul: Math.pow(1.45, loop),       // boss HP
+    coinMul: 1 + 0.4 * (n - 1),          // coins scale with the level so the shop keeps pace
+  };
+}
 
 function rng(seed) {
   let a = seed >>> 0;
@@ -28,27 +33,25 @@ function rng(seed) {
   };
 }
 
-// Row recipes per section. Rows get track space in proportion to how much they throw at the
-// player (ROW_WEIGHT), so busy rows (3-packs, swarms, bosses) get extra breathing room.
+// Row recipes for the two halves of a level ('cp' = checkpoint gate with breathing room around it).
+// Rows get track space in proportion to how much they throw at the player (ROW_WEIGHT).
 const PLAN = [
-  ['e1', 'e1', 'e2', 'gate', 'e2', 'b1', 'e2', 'gate', 'e3'],
-  ['e2', 'e3', 'gate', 'b1', 'e2', 'big', 'gate', 'e2', 'e3'],
-  ['e2', 'b2', 'gate', 'e3', 'e2', 'swarm', 'gate', 'big', 'e2'],
-  ['e3', 'big', 'gate', 'swarm', 'b2', 'e3', 'gate', 'big', 'e3'],
-  ['swarm', 'e3', 'gate', 'big', 'b2', 'swarm', 'gate', 'e3', 'big'],
-  ['swarm', 'e3', 'gate', 'big', 'swarm', 'b2', 'e3', 'gate'],
+  'e1', 'e1', 'e2', 'gate', 'e2', 'b1', 'e3', 'e2', 'swarm', 'gate', 'e3', 'big', 'e2', 'b2', 'e3', 'swarm', 'e2', 'e3', 'cp',
+  'e2', 'gate', 'e3', 'big', 'swarm', 'b2', 'e3', 'e2', 'gate', 'big', 'swarm', 'e3', 'b2', 'e3', 'gate', 'big', 'swarm', 'e3', 'big', 'cp2',
 ];
+const ROW_WEIGHT = { e1: 0.8, e2: 0.95, e3: 1.15, swarm: 1.35, big: 1.15, b1: 0.85, b2: 1.0, gate: 1.05, cp: 1.6, cp2: 1.3 };
 
-// Enemy HP grows a little faster than the base weapon to account for gate boosts.
-const ROW_WEIGHT = { e1: 0.8, e2: 0.95, e3: 1.15, swarm: 1.35, big: 1.15, boss: 1.6, b1: 0.85, b2: 1.0, gate: 1.05 };
-
-export const HP_MULT = [1.05, 1.25, 1.45, 1.65, 1.9, 2.4];
+// Enemy HP over the course of a level, relative to the era's first weapon: grows with the
+// gates and power-ups a decent player picks up on the way.
+export const RAMP = [1.0, 3.2];
+export const rampAt = (p) => RAMP[0] + (RAMP[1] - RAMP[0]) * Math.pow(Math.min(1, Math.max(0, p)), 1.1);
+export const XP_SHARE = 0.4; // XP for the era's second weapon, as a share of the level's total enemy HP
 
 const GOOD = {
-  rate: (r) => 10 + Math.round(r() * 3) * 5, // 10..25
-  dmg: (r) => 15 + Math.round(r() * 3) * 5,
+  rate: (r) => 15 + Math.round(r() * 3) * 5, // 15..30
+  dmg: (r) => 20 + Math.round(r() * 3) * 5,
   shot: () => 1,
-  hp: () => 25,
+  hp: () => 30,
 };
 const BAD = {
   rate: (r) => -(10 + Math.round(r() * 3) * 5),
@@ -56,76 +59,79 @@ const BAD = {
   shot: () => -1,
 };
 
-function gatePair(r, k, idx) {
+function gatePair(r, idx) {
   const good = (kind) => ({ kind, value: GOOD[kind](r) });
   const bad = (kind) => ({ kind, value: BAD[kind](r) });
   let pair;
-  if (k === 0 && idx === 0) pair = [good('shot'), bad('rate')];
-  else if (k === 0) pair = [good('rate'), good('dmg')];
-  // a second chance at an extra shot early on, so missing the first one doesn't snowball
-  else if (k === 1 && idx === 0) pair = [good('shot'), good('hp')];
+  if (idx === 0) pair = [good('shot'), bad('rate')];
+  else if (idx === 1) pair = [good('rate'), good('dmg')];
+  else if (idx === 2) pair = [good('shot'), good('hp')];
   else {
     const roll = r();
     const kinds = ['rate', 'dmg'];
     const g1 = kinds[Math.floor(r() * 2)];
-    if (idx === 0 && (k === 2 || k === 4)) pair = [good('shot'), bad(g1)];
-    else if (roll < 0.35) pair = [good(g1), bad(g1 === 'rate' ? 'dmg' : 'rate')];
-    else if (roll < 0.6) pair = [good('rate'), good('dmg')];
-    else if (roll < 0.8) pair = [good(g1), good('hp')];
+    if (roll < 0.4) pair = [good(g1), bad(g1 === 'rate' ? 'dmg' : 'rate')];
+    else if (roll < 0.7) pair = [good('rate'), good('dmg')];
     else pair = [good(g1), bad('shot')];
   }
   if (r() < 0.5) pair.reverse();
   return pair;
 }
 
-export function buildLevel(seed = 11) {
-  const r = rng(seed);
+export function buildLevel(n = 1) {
+  const info = levelInfo(n);
+  const r = rng(11 + info.era * 7 + info.loop * 101);
+  const base = tierDps(info.era * 2) * info.hpMul;
   const items = [];
-  const sectionHP = [0, 0, 0, 0, 0, 0];
-  for (let k = 0; k < 6; k++) {
-    const rows = PLAN[k];
-    const totalW = rows.reduce((a, row) => a + ROW_WEIGHT[row], 0);
-    let cursor = 0;
-    const h = sectionRef(k) * HP_MULT[k];
-    let gateIdx = 0;
-    rows.forEach((row, i) => {
-      const span = (SECTION * ROW_WEIGHT[row]) / totalW;
-      const at = START + k * SECTION + cursor + (r() - 0.5) * 40;
-      cursor += span;
-      const enemy = (x, hp, size = 1, dmg = 12, off = 0) => {
-        hp = Math.max(1, Math.round(hp));
-        items.push({ type: 'enemy', at: at + off, x, hp, size, dmg, section: k });
-        sectionHP[k] += hp;
-      };
-      const block = (x, hp) => {
-        hp = Math.max(2, Math.round(hp));
-        items.push({ type: 'block', at, x, hp, size: 1, dmg: 18, section: k });
-        sectionHP[k] += hp;
-      };
-      const jitter = () => (r() - 0.5) * 50;
-      switch (row) {
-        case 'e1': enemy((r() - 0.5) * 220, h * 1.1); break;
-        case 'e2': enemy(-80 + jitter(), h * 0.85); enemy(80 + jitter(), h * 0.85, 1, 12, 120); break;
-        case 'e3': [-140, 0, 140].forEach((x, j) => enemy(x + jitter() * 0.5, h * 0.65, 1, 12, [0, 110, 220][j])); break;
-        case 'swarm': [-150, -75, 0, 75, 150].forEach((x, j) => enemy(x, h * 0.4, 0.8, 8, Math.abs(j - 2) * 85)); break;
-        case 'big': enemy((r() - 0.5) * 160, h * 2.4, 1.4, 16); break;
-        case 'boss': enemy(-150, h * 0.6, 1, 10); enemy(150, h * 0.6, 1, 10); enemy(0, h * 5, 1.9, 40, 200); break;
-        case 'b1': block([-150, 0, 150][Math.floor(r() * 3)], h * 3); break;
-        case 'b2': {
-          const lanes = [-150, 0, 150];
-          lanes.splice(Math.floor(r() * 3), 1);
-          lanes.forEach((x) => block(x, h * 2.6));
-          break;
-        }
-        case 'gate': items.push({ type: 'gate', at, gates: gatePair(r, k, gateIdx++), section: k }); break;
+  let total = 0;
+  const totalW = PLAN.reduce((a, row) => a + ROW_WEIGHT[row], 0);
+  let cursor = 0, gateIdx = 0;
+  const checkpoints = [];
+  PLAN.forEach((row) => {
+    const span = (LEN * ROW_WEIGHT[row]) / totalW;
+    const at = START + cursor + (row.startsWith('cp') ? span / 2 : (r() - 0.5) * 40);
+    const p = cursor / LEN;
+    cursor += span;
+    const h = base * rampAt(p);
+    const dmgMul = info.dmgMul;
+    const section = Math.min(5, Math.floor(p * 6));
+    const enemy = (x, hp, size = 1, dmg = 12, off = 0) => {
+      hp = Math.max(1, Math.round(hp));
+      items.push({ type: 'enemy', at: at + off, x, hp, size, dmg: Math.round(dmg * dmgMul), section, ref: base * rampAt(p) });
+      total += hp;
+    };
+    const block = (x, hp) => {
+      hp = Math.max(2, Math.round(hp));
+      items.push({ type: 'block', at, x, hp, size: 1, dmg: Math.round(18 * dmgMul), section, ref: base * rampAt(p) });
+      total += hp;
+    };
+    const jitter = () => (r() - 0.5) * 50;
+    switch (row) {
+      case 'e1': enemy((r() - 0.5) * 220, h * 1.1); break;
+      case 'e2': enemy(-80 + jitter(), h * 0.85); enemy(80 + jitter(), h * 0.85, 1, 12, 120); break;
+      case 'e3': [-140, 0, 140].forEach((x, j) => enemy(x + jitter() * 0.5, h * 0.65, 1, 12, [0, 110, 220][j])); break;
+      case 'swarm': [-150, -75, 0, 75, 150].forEach((x, j) => enemy(x, h * 0.4, 0.8, 8, Math.abs(j - 2) * 85)); break;
+      case 'big': enemy((r() - 0.5) * 160, h * 2.4, 1.4, 16); break;
+      case 'b1': block([-150, 0, 150][Math.floor(r() * 3)], h * 3); break;
+      case 'b2': {
+        const lanes = [-150, 0, 150];
+        lanes.splice(Math.floor(r() * 3), 1);
+        lanes.forEach((x) => block(x, h * 2.6));
+        break;
       }
-    });
-  }
-  const finish = START + 6 * SECTION - 150;
+      case 'gate': items.push({ type: 'gate', at, gates: gatePair(r, gateIdx++), section }); break;
+      case 'cp': case 'cp2': {
+        const cp = { type: 'checkpoint', at, idx: checkpoints.length };
+        checkpoints.push(at);
+        items.push(cp);
+        break;
+      }
+    }
+  });
+  const finish = START + LEN;
   items.sort((a, b) => a.at - b.at);
-  const total = sectionHP.reduce((a, v) => a + v, 0);
-  const need = XP_STEPS.slice(0, MAX_TIER).map((v) => Math.round((v * total) / XP_REF_TOTAL / 5) * 5);
-  return { items, need, finish, sectionHP };
+  const need = [Math.round((total * XP_SHARE) / 5) * 5];
+  return { info, items, need, finish, checkpoints, totalHP: total };
 }
 
 export { ERAS };
