@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { ERAS } from './eras.js';
+import { ERAS, WEAPONS } from './eras.js';
 import { UPGRADES, upgCost } from './upgrades.js';
 import { Save } from './save.js';
 import { Sound } from './audio.js';
@@ -64,15 +64,22 @@ export const ScreenMethods = {
     const sub = this.add.text(0, 372, 'Evolve your weapon from the\nStone Age to the Future!', style(21, '#ffffff', 5)).setOrigin(0.5);
     c.add([t1, t2, sub]);
     const row = this.add.graphics();
-    row.fillStyle(0x000000, 0.4).fillRoundedRect(-250, 412, 500, 88, 20);
+    row.fillStyle(0x000000, 0.4).fillRoundedRect(-256, 410, 512, 106, 20);
     c.add(row);
+    // 12 weapons: one column per era, its two weapons side by side, era name underneath
+    const bestTier = Save.data.best.tier;
+    const short = ['STONE', 'BRONZE', 'MEDIEVAL', 'GUNPOWDER', 'MODERN', 'FUTURE'];
     ERAS.forEach((e, i) => {
-      const x = -208 + i * 83;
-      c.add(this.add.image(x, 456, 'weapon_' + e.key).setScale(0.23).setAlpha(i <= Save.data.best.era || i === 0 ? 1 : 0.55));
-      if (i < 5) c.add(this.add.text(x + 42, 456, '›', style(30, '#ffe14d', 4)).setOrigin(0.5));
+      const x = -213 + i * 85.2;
+      for (let j = 0; j < 2; j++) {
+        const t = i * 2 + j;
+        c.add(this.add.image(x - 17 + j * 34, 450, 'weapon_' + WEAPONS[t].key).setScale(0.165).setAlpha(t <= bestTier || t === 0 ? 1 : 0.45));
+      }
+      c.add(this.add.text(x, 498, short[i], style(11, col(e.ui), 3)).setOrigin(0.5));
+      if (i < 5) c.add(this.add.text(x + 42.6, 452, '›', style(26, '#ffe14d', 4)).setOrigin(0.5));
     });
     const b = Save.data.best;
-    const bestLine = b.runs ? `BEST ERA: ${b.era >= 0 ? ERAS[b.era].name : '-'}   WINS: ${b.wins}   BOSSES: ${b.bossKills.reduce((a, v) => a + v, 0)}` : 'Beat the boss at the end to win!';
+    const bestLine = b.runs ? `BEST: ${b.tier >= 0 ? WEAPONS[b.tier].name.toUpperCase() : '-'}   WINS: ${b.wins}   BOSSES: ${b.bossKills.reduce((a, v) => a + v, 0)}` : 'Beat the boss at the end to win!';
     c.add(this.add.text(0, 530, bestLine, style(17, '#ffe9b0', 4)).setOrigin(0.5));
     const how = this.add.text(0, 610,
       'DRAG left / right to steer\nDefeat enemies for XP and COINS\nSteer through GREEN gates (shoot red ones!)\nDodge the boss\'s red lanes', style(18, '#ffffff', 5, { lineSpacing: 6 })).setOrigin(0.5);
@@ -200,10 +207,12 @@ export const ScreenMethods = {
     const sub = r.won ? `You beat the ${r.bossName}!` : r.bossName ? `The ${r.bossName} got you` : `Fell at ${r.pct}% of the track`;
     c.add(this.add.text(0, 300, sub, style(19, '#ffffff', 4)).setOrigin(0.5));
     const e = ERAS[r.era];
-    c.add(this.add.image(-150, 370, 'weapon_' + e.key).setScale(0.36));
-    c.add(this.add.text(-95, 352, 'REACHED', style(15, '#bbbbbb', 0)).setOrigin(0, 0.5));
-    c.add(this.add.text(-95, 382, e.name, style(28, col(e.ui === 0x29d8ff ? 0x29f0ff : 0xffffff), 6)).setOrigin(0, 0.5));
-    if (r.newBest) c.add(this.add.text(-95, 412, 'NEW BEST ERA!', style(15, '#7dff9a', 3)).setOrigin(0, 0.5));
+    const w = WEAPONS[r.tier ?? r.era * 2];
+    c.add(this.add.image(-150, 372, 'weapon_' + w.key).setScale(0.34));
+    c.add(this.add.text(-95, 344, 'REACHED', style(15, '#bbbbbb', 0)).setOrigin(0, 0.5));
+    c.add(this.add.text(-95, 372, e.name, style(28, col(e.ui === 0x29d8ff ? 0x29f0ff : 0xffffff), 6)).setOrigin(0, 0.5));
+    c.add(this.add.text(-95, 401, w.name.toUpperCase(), style(16, '#ffe9b0', 3)).setOrigin(0, 0.5));
+    if (r.newBest) c.add(this.add.text(-95, 424, 'NEW BEST WEAPON!', style(14, '#7dff9a', 3)).setOrigin(0, 0.5));
     // coins earned
     const cg = this.add.graphics();
     cg.fillStyle(0x000000, 0.45).fillRoundedRect(-210, 440, 420, 92, 18);

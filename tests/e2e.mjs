@@ -35,6 +35,13 @@ try {
   check('canvas fills the phone screen', box.w >= 389 && box.h >= 843, `${box.w}x${box.h}`);
   check('title has PLAY, UPGRADES and settings buttons', !!(await ui('play')) && !!(await ui('shop')) && !!(await ui('settings')));
 
+  // ---- a Stage 2 save (v1: no weapon tiers) still loads and keeps its coins and upgrades
+  await page.evaluate(() => localStorage.setItem('eraRunner.save.v1', JSON.stringify({ coins: 1234, upg: { dmg: 3, rate: 2, hp: 1, xp: 1, coin: 0 }, best: { era: 4, wins: 5, runs: 9, bestCoins: 210, bossKills: [0, 0, 1, 1, 3, 0] }, music: true, sfx: false })));
+  await page.reload(); await ready(); await sleep(300);
+  const mig = await page.evaluate(() => __ER.save.data);
+  check('Stage 2 save migrates without losing coins or upgrades', mig.coins === 1234 && mig.upg.dmg === 3 && mig.upg.xp === 1 && mig.best.tier === 9 && mig.best.wins === 5 && mig.v === 2 && mig.sfx === false,
+    `coins ${mig.coins}, best tier ${mig.best.tier}, v${mig.v}`);
+
   // ---- shop: give coins, buy an upgrade, reload, still bought
   await page.evaluate(() => { localStorage.setItem('eraRunner.save.v1', JSON.stringify({ coins: 500 })); });
   await page.reload(); await ready(); await sleep(400);
@@ -94,6 +101,34 @@ try {
   await page.evaluate(() => { __ER.setBot(null); const s = __ER.scene; s.finishRun(false); });
   await sleep(300); await tap('play');
   check('tapping RETRY while the coin counter runs starts a new run', (await state()).mode === 'play');
+
+  // weapon tiers: 12 weapons, a tier step inside an era vs. a new era
+  const tiers = await page.evaluate(() => {
+    const s = __ER.scene; s.closeScreen(); s.mode = 'won'; __ER.setTestUpgrades({}, true); s.startRun(); __ER.setBot(null);
+    const out = { start: [s.tier, s.era, s.weapon.name] };
+    s.gainXp(s.level.need[0] + 0.1);
+    out.step1 = [s.tier, s.era, s.weapon.name, s.bannerC?.list?.map((t) => t.text).filter(Boolean).join(' ')];
+    s.gainXp(s.level.need[1] - s.xp + 0.1);
+    out.step2 = [s.tier, s.era, s.weapon.name, s.bannerC?.list?.map((t) => t.text).filter(Boolean).join(' ')];
+    out.need = s.level.need;
+    return out;
+  });
+  check('run starts with the Thrown Rock in the Stone Age', tiers.start[0] === 0 && tiers.start[2] === 'Thrown Rock');
+  check('first XP step upgrades the weapon inside the era (UPGRADED! banner)', tiers.step1[0] === 1 && tiers.step1[1] === 0 && /UPGRADED/.test(tiers.step1[3]), tiers.step1.join(' / '));
+  check('second step evolves into the next era (EVOLVED! banner)', tiers.step2[0] === 2 && tiers.step2[1] === 1 && /EVOLVED/.test(tiers.step2[3]), tiers.step2.join(' / '));
+  check('XP steps get more expensive', tiers.need.length === 11 && tiers.need.slice(0, 9).every((v, i, a) => i === 0 || v > a[i - 1]), tiers.need.join(','));
+  // XP comes from gems: kill an enemy in your lane, drive over its gem
+  const gem = await page.evaluate(() => {
+    const s = __ER.scene; s.closeScreen(); s.mode = 'won'; s.startRun(); __ER.setBot(null);
+    s.objs.forEach((o) => { o.dead = true; }); s.qi = s.level.items.length;
+    s.spawn({ type: 'enemy', at: s.d + 500, x: 0, hp: 3, size: 1, dmg: 12, section: 0 });
+    s.tx = s.px = 0;
+    const xp0 = s.xp; let t = 0;
+    while (t < 5 && s.stats.gems === 0) { s.step(1 / 60); t += 1 / 60; }
+    return { xp0, xp: s.xp, gems: s.stats.gems, t };
+  });
+  check('killing an enemy drops an XP gem you can pick up', gem.gems > 0 && gem.xp > gem.xp0, `xp ${gem.xp0} -> ${gem.xp.toFixed(1)} after ${gem.t.toFixed(1)}s`);
+  await page.evaluate(() => __ER.setTestUpgrades(null, false));
 
   // lose: low health, no steering -> lose screen, half the coins kept
   const lost = await page.evaluate(() => { const s = __ER.scene; s.closeScreen(); s.mode = 'won'; s.startRun(); __ER.setBot(null); s.tx = 0; s.hp = 15; s.runCoins = 40; return __ER.sim(120); });

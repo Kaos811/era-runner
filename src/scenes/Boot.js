@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { ERAS } from '../eras.js';
+import { ERAS, WEAPONS } from '../eras.js';
 
 // All art is generated at startup with vector drawing, at 2x resolution (K) so it stays sharp.
 const K = 2;
@@ -43,7 +43,51 @@ function enemy(scene, key) {
     p.fill(look.legs).rrect(26, 76, 11, 22, 4).rrect(43, 76, 11, 22, 4);
     p.fill(0x2a1d14).rrect(24, 92, 14, 8, 3).rrect(42, 92, 14, 8, 3);
     // weapon in right hand (behind the hand)
-    if (key === 'stone') { p.fill(0x7a4a24).rrect(63, 30, 8, 48, 3); p.fill(0x6a3d1c).circle(67, 30, 10); }
+    if (key === 'rock') { // a hand gripping a rock
+      p.fill(0xc98a5a).rrect(40, 86, 30, 64, 12); p.fill(0xa86f45).rect(40, 120, 30, 4);
+      p.fill(0x6e6a64).poly([[30, 52], [40, 26], [62, 18], [82, 32], [84, 58], [68, 76], [42, 74]]);
+      p.fill(0x9a958e).poly([[36, 50], [44, 30], [62, 24], [76, 34], [78, 54], [66, 68], [46, 68]]);
+      p.fill(0xc4c0b9).circle(52, 36, 5); p.fill(0x7f7a73).circle(68, 52, 4);
+      p.fill(0xd99a6a).rrect(32, 66, 48, 26, 12);
+      p.fill(0xb5784c); for (let i = 0; i < 3; i++) p.rect(43 + i * 12, 68, 2, 18);
+      p.fill(0xd99a6a).rrect(24, 54, 14, 30, 7);
+    } else if (key === 'javelin') { // a plain hand-thrown javelin
+      p.fill(0x9b6a35).rrect(51, 22, 8, 128, 4); p.fill(0xb98447).rect(53, 22, 2, 128);
+      p.fill(0x8a5a2b).poly([[55, 0], [64, 16], [60, 32], [50, 32], [46, 16]]); p.fill(0xcd7f32).poly([[55, 3], [61, 16], [58, 29], [52, 29], [49, 16]]);
+      p.fill(0xe7a95b).tri(55, 5, 52, 16, 55, 27);
+      p.fill(0x5a3a1a).rrect(48, 92, 14, 26, 4); p.fill(0x7a4a24).rect(48, 98, 14, 3).rect(48, 106, 14, 3);
+      p.fill(0xc0392b).rect(49, 34, 12, 4);
+    } else if (key === 'repeater') { // repeating crossbow with a bolt magazine on top
+      p.fill(0x7a4a24).rrect(46, 40, 18, 108, 6); p.fill(0x5a3a1a).rrect(44, 116, 22, 32, 6);
+      p.line(10, 0x4a2c12).spoly([[4, 70], [22, 52], [55, 44], [88, 52], [106, 70]]);
+      p.line(5, 0x8b5a2b).spoly([[6, 68], [22, 53], [55, 46], [88, 53], [104, 68]]);
+      p.line(2, 0xeeeeee).seg(6, 70, 55, 88).seg(104, 70, 55, 88);
+      p.fill(0x6b4423).rrect(40, 0, 30, 66, 5); p.fill(0x8b5a2b).rrect(43, 4, 24, 58, 4);
+      for (let i = 0; i < 5; i++) { p.fill(0xd9dee3).tri(47 + i * 4, 6, 45 + i * 4, 12, 49 + i * 4, 12); p.fill(0x3a2a1a).rect(46 + i * 4, 12, 2, 40); }
+      p.fill(0x2c6fbf).rect(43, 50, 24, 5);
+      p.line(5, 0x9aa4ad).seg(70, 30, 92, 96); p.fill(0x5a3a1a).circle(92, 98, 6);
+    } else if (key === 'musket') { // long flintlock musket
+      p.fill(0x6b4423).poly([[46, 70], [64, 70], [72, 148], [38, 148]]); p.fill(0x8b5a2b).poly([[49, 74], [61, 74], [66, 144], [44, 144]]);
+      p.fill(0x50565e).rrect(50, 0, 10, 100, 4); p.fill(0x7d848d).rect(52, 2, 3, 96);
+      p.fill(0x22252b).ellipse(55, 2, 10, 4);
+      p.fill(0xd4a017).rect(48, 30, 14, 4).rect(48, 64, 14, 4).rect(46, 118, 18, 4);
+      p.fill(0x3a3d43).rrect(62, 84, 12, 14, 3); p.fill(0x22252b).poly([[66, 84], [76, 74], [80, 78], [72, 88]]);
+      p.line(2, 0x3a2a1a).seg(46, 20, 46, 70);
+    } else if (key === 'rifle') { // assault rifle with a scope
+      p.fill(0x1f2125).rrect(51, 0, 8, 46, 3); p.fill(0x111214).rect(49, 0, 12, 6);
+      p.fill(0x3a3d43).rrect(44, 40, 22, 40, 5); for (let i = 0; i < 3; i++) p.fill(0x22252b).rect(47, 46 + i * 11, 16, 5);
+      p.fill(0x2b2d31).rrect(40, 78, 30, 40, 6);
+      p.fill(0x111214).rrect(25, 58, 14, 48, 6); p.fill(0x29a8ff, 0.8).circle(32, 60, 4); p.fill(0x29a8ff, 0.5).circle(32, 104, 4);
+      p.fill(0x3e4148).poly([[70, 84], [86, 90], [84, 116], [70, 112]]);
+      p.fill(0x2b2d31).poly([[44, 118], [66, 118], [70, 148], [40, 148]]); p.fill(0x3e4148).rect(46, 126, 18, 4);
+    } else if (key === 'plasma') { // twin-prong plasma cannon
+      p.fill(0xff4fd8, 0.25).circle(55, 18, 22); p.fill(0xff4fd8, 0.7).circle(55, 18, 12); p.fill(0xffffff).circle(55, 18, 6);
+      p.fill(0x8e9aa8).rrect(26, 8, 14, 56, 6).rrect(70, 8, 14, 56, 6); p.fill(0xff4fd8).rect(30, 20, 6, 30).rect(74, 20, 6, 30);
+      p.fill(0x2b2f45).rrect(20, 50, 70, 70, 18); p.fill(0x3d4262).rrect(26, 56, 58, 58, 14);
+      p.fill(0xff4fd8, 0.4).circle(55, 85, 20); p.fill(0xff4fd8).circle(55, 85, 13); p.fill(0xffd6f5).circle(55, 85, 6);
+      p.fill(0xeef3f8).rrect(36, 116, 38, 22, 8); p.fill(0x7a5cff).rrect(40, 134, 30, 14, 6);
+      p.fill(0x29f0ff).rect(22, 74, 4, 22).rect(84, 74, 4, 22);
+    } else if (key === 'stone') { p.fill(0x7a4a24).rrect(63, 30, 8, 48, 3); p.fill(0x6a3d1c).circle(67, 30, 10); }
     if (key === 'bronze') { p.fill(0x8a5a2b).rect(65, 6, 4, 76); p.fill(0xcd7f32).tri(67, -2 + 2, 61, 14, 73, 14); }
     if (key === 'medieval') { p.fill(0xd9dee3).rect(64, 22, 7, 46); p.fill(0x5a4632).rect(59, 66, 17, 4); }
     if (key === 'gunpowder') { p.fill(0x5a3a1a).rect(64, 14, 6, 66); p.fill(0x333333).rect(65, 8, 4, 12); }
@@ -54,7 +98,51 @@ function enemy(scene, key) {
     p.fill(look.arms).rrect(7, 46, 12, 28, 6).rrect(61, 46, 12, 28, 6);
     p.fill(key === 'future' || key === 'medieval' ? look.arms : skin).circle(13, 76, 6).circle(67, 76, 6);
     // body details
-    if (key === 'stone') { p.fill(0x6a3d1c).circle(30, 56, 4).circle(48, 66, 5).circle(40, 50, 3); p.fill(skin).tri(18, 42, 34, 42, 18, 58); }
+    if (key === 'rock') { // a hand gripping a rock
+      p.fill(0xc98a5a).rrect(40, 86, 30, 64, 12); p.fill(0xa86f45).rect(40, 120, 30, 4);
+      p.fill(0x6e6a64).poly([[30, 52], [40, 26], [62, 18], [82, 32], [84, 58], [68, 76], [42, 74]]);
+      p.fill(0x9a958e).poly([[36, 50], [44, 30], [62, 24], [76, 34], [78, 54], [66, 68], [46, 68]]);
+      p.fill(0xc4c0b9).circle(52, 36, 5); p.fill(0x7f7a73).circle(68, 52, 4);
+      p.fill(0xd99a6a).rrect(32, 66, 48, 26, 12);
+      p.fill(0xb5784c); for (let i = 0; i < 3; i++) p.rect(43 + i * 12, 68, 2, 18);
+      p.fill(0xd99a6a).rrect(24, 54, 14, 30, 7);
+    } else if (key === 'javelin') { // a plain hand-thrown javelin
+      p.fill(0x9b6a35).rrect(51, 22, 8, 128, 4); p.fill(0xb98447).rect(53, 22, 2, 128);
+      p.fill(0x8a5a2b).poly([[55, 0], [64, 16], [60, 32], [50, 32], [46, 16]]); p.fill(0xcd7f32).poly([[55, 3], [61, 16], [58, 29], [52, 29], [49, 16]]);
+      p.fill(0xe7a95b).tri(55, 5, 52, 16, 55, 27);
+      p.fill(0x5a3a1a).rrect(48, 92, 14, 26, 4); p.fill(0x7a4a24).rect(48, 98, 14, 3).rect(48, 106, 14, 3);
+      p.fill(0xc0392b).rect(49, 34, 12, 4);
+    } else if (key === 'repeater') { // repeating crossbow with a bolt magazine on top
+      p.fill(0x7a4a24).rrect(46, 40, 18, 108, 6); p.fill(0x5a3a1a).rrect(44, 116, 22, 32, 6);
+      p.line(10, 0x4a2c12).spoly([[4, 70], [22, 52], [55, 44], [88, 52], [106, 70]]);
+      p.line(5, 0x8b5a2b).spoly([[6, 68], [22, 53], [55, 46], [88, 53], [104, 68]]);
+      p.line(2, 0xeeeeee).seg(6, 70, 55, 88).seg(104, 70, 55, 88);
+      p.fill(0x6b4423).rrect(40, 0, 30, 66, 5); p.fill(0x8b5a2b).rrect(43, 4, 24, 58, 4);
+      for (let i = 0; i < 5; i++) { p.fill(0xd9dee3).tri(47 + i * 4, 6, 45 + i * 4, 12, 49 + i * 4, 12); p.fill(0x3a2a1a).rect(46 + i * 4, 12, 2, 40); }
+      p.fill(0x2c6fbf).rect(43, 50, 24, 5);
+      p.line(5, 0x9aa4ad).seg(70, 30, 92, 96); p.fill(0x5a3a1a).circle(92, 98, 6);
+    } else if (key === 'musket') { // long flintlock musket
+      p.fill(0x6b4423).poly([[46, 70], [64, 70], [72, 148], [38, 148]]); p.fill(0x8b5a2b).poly([[49, 74], [61, 74], [66, 144], [44, 144]]);
+      p.fill(0x50565e).rrect(50, 0, 10, 100, 4); p.fill(0x7d848d).rect(52, 2, 3, 96);
+      p.fill(0x22252b).ellipse(55, 2, 10, 4);
+      p.fill(0xd4a017).rect(48, 30, 14, 4).rect(48, 64, 14, 4).rect(46, 118, 18, 4);
+      p.fill(0x3a3d43).rrect(62, 84, 12, 14, 3); p.fill(0x22252b).poly([[66, 84], [76, 74], [80, 78], [72, 88]]);
+      p.line(2, 0x3a2a1a).seg(46, 20, 46, 70);
+    } else if (key === 'rifle') { // assault rifle with a scope
+      p.fill(0x1f2125).rrect(51, 0, 8, 46, 3); p.fill(0x111214).rect(49, 0, 12, 6);
+      p.fill(0x3a3d43).rrect(44, 40, 22, 40, 5); for (let i = 0; i < 3; i++) p.fill(0x22252b).rect(47, 46 + i * 11, 16, 5);
+      p.fill(0x2b2d31).rrect(40, 78, 30, 40, 6);
+      p.fill(0x111214).rrect(25, 58, 14, 48, 6); p.fill(0x29a8ff, 0.8).circle(32, 60, 4); p.fill(0x29a8ff, 0.5).circle(32, 104, 4);
+      p.fill(0x3e4148).poly([[70, 84], [86, 90], [84, 116], [70, 112]]);
+      p.fill(0x2b2d31).poly([[44, 118], [66, 118], [70, 148], [40, 148]]); p.fill(0x3e4148).rect(46, 126, 18, 4);
+    } else if (key === 'plasma') { // twin-prong plasma cannon
+      p.fill(0xff4fd8, 0.25).circle(55, 18, 22); p.fill(0xff4fd8, 0.7).circle(55, 18, 12); p.fill(0xffffff).circle(55, 18, 6);
+      p.fill(0x8e9aa8).rrect(26, 8, 14, 56, 6).rrect(70, 8, 14, 56, 6); p.fill(0xff4fd8).rect(30, 20, 6, 30).rect(74, 20, 6, 30);
+      p.fill(0x2b2f45).rrect(20, 50, 70, 70, 18); p.fill(0x3d4262).rrect(26, 56, 58, 58, 14);
+      p.fill(0xff4fd8, 0.4).circle(55, 85, 20); p.fill(0xff4fd8).circle(55, 85, 13); p.fill(0xffd6f5).circle(55, 85, 6);
+      p.fill(0xeef3f8).rrect(36, 116, 38, 22, 8); p.fill(0x7a5cff).rrect(40, 134, 30, 14, 6);
+      p.fill(0x29f0ff).rect(22, 74, 4, 22).rect(84, 74, 4, 22);
+    } else if (key === 'stone') { p.fill(0x6a3d1c).circle(30, 56, 4).circle(48, 66, 5).circle(40, 50, 3); p.fill(skin).tri(18, 42, 34, 42, 18, 58); }
     if (key === 'bronze') { p.fill(0xcd7f32).rect(18, 66, 44, 6); p.fill(0xcd7f32).circle(13, 60, 15); p.fill(0xa86424).circle(13, 60, 10); p.fill(0xe7a95b).circle(13, 60, 4); }
     if (key === 'medieval') { p.fill(0xc0392b).rrect(28, 46, 24, 30, 6); p.fill(0xf1c40f).rect(38, 50, 4, 20).rect(32, 56, 16, 4); }
     if (key === 'gunpowder') { p.line(4, 0xffffff).seg(20, 44, 58, 80).seg(60, 44, 22, 80); p.fill(0xf1c40f).circle(40, 62, 3); }
@@ -73,7 +161,51 @@ function enemy(scene, key) {
       p.fill(0x111111).circle(34, 29, 2.5).circle(46, 29, 2.5);
       p.line(3, 0x2b1a10).seg(27, 20, 37, 23).seg(53, 20, 43, 23);
       p.fill(0x8a3b2a).rrect(34, 36, 12, 4, 2);
-      if (key === 'stone') { p.fill(0x4a2c12).ellipse(40, 14, 38, 16).circle(25, 20, 6).circle(55, 20, 6).circle(32, 9, 6).circle(48, 9, 6); p.fill(0x4a2c12).ellipse(40, 41, 22, 8); }
+      if (key === 'rock') { // a hand gripping a rock
+      p.fill(0xc98a5a).rrect(40, 86, 30, 64, 12); p.fill(0xa86f45).rect(40, 120, 30, 4);
+      p.fill(0x6e6a64).poly([[30, 52], [40, 26], [62, 18], [82, 32], [84, 58], [68, 76], [42, 74]]);
+      p.fill(0x9a958e).poly([[36, 50], [44, 30], [62, 24], [76, 34], [78, 54], [66, 68], [46, 68]]);
+      p.fill(0xc4c0b9).circle(52, 36, 5); p.fill(0x7f7a73).circle(68, 52, 4);
+      p.fill(0xd99a6a).rrect(32, 66, 48, 26, 12);
+      p.fill(0xb5784c); for (let i = 0; i < 3; i++) p.rect(43 + i * 12, 68, 2, 18);
+      p.fill(0xd99a6a).rrect(24, 54, 14, 30, 7);
+    } else if (key === 'javelin') { // a plain hand-thrown javelin
+      p.fill(0x9b6a35).rrect(51, 22, 8, 128, 4); p.fill(0xb98447).rect(53, 22, 2, 128);
+      p.fill(0x8a5a2b).poly([[55, 0], [64, 16], [60, 32], [50, 32], [46, 16]]); p.fill(0xcd7f32).poly([[55, 3], [61, 16], [58, 29], [52, 29], [49, 16]]);
+      p.fill(0xe7a95b).tri(55, 5, 52, 16, 55, 27);
+      p.fill(0x5a3a1a).rrect(48, 92, 14, 26, 4); p.fill(0x7a4a24).rect(48, 98, 14, 3).rect(48, 106, 14, 3);
+      p.fill(0xc0392b).rect(49, 34, 12, 4);
+    } else if (key === 'repeater') { // repeating crossbow with a bolt magazine on top
+      p.fill(0x7a4a24).rrect(46, 40, 18, 108, 6); p.fill(0x5a3a1a).rrect(44, 116, 22, 32, 6);
+      p.line(10, 0x4a2c12).spoly([[4, 70], [22, 52], [55, 44], [88, 52], [106, 70]]);
+      p.line(5, 0x8b5a2b).spoly([[6, 68], [22, 53], [55, 46], [88, 53], [104, 68]]);
+      p.line(2, 0xeeeeee).seg(6, 70, 55, 88).seg(104, 70, 55, 88);
+      p.fill(0x6b4423).rrect(40, 0, 30, 66, 5); p.fill(0x8b5a2b).rrect(43, 4, 24, 58, 4);
+      for (let i = 0; i < 5; i++) { p.fill(0xd9dee3).tri(47 + i * 4, 6, 45 + i * 4, 12, 49 + i * 4, 12); p.fill(0x3a2a1a).rect(46 + i * 4, 12, 2, 40); }
+      p.fill(0x2c6fbf).rect(43, 50, 24, 5);
+      p.line(5, 0x9aa4ad).seg(70, 30, 92, 96); p.fill(0x5a3a1a).circle(92, 98, 6);
+    } else if (key === 'musket') { // long flintlock musket
+      p.fill(0x6b4423).poly([[46, 70], [64, 70], [72, 148], [38, 148]]); p.fill(0x8b5a2b).poly([[49, 74], [61, 74], [66, 144], [44, 144]]);
+      p.fill(0x50565e).rrect(50, 0, 10, 100, 4); p.fill(0x7d848d).rect(52, 2, 3, 96);
+      p.fill(0x22252b).ellipse(55, 2, 10, 4);
+      p.fill(0xd4a017).rect(48, 30, 14, 4).rect(48, 64, 14, 4).rect(46, 118, 18, 4);
+      p.fill(0x3a3d43).rrect(62, 84, 12, 14, 3); p.fill(0x22252b).poly([[66, 84], [76, 74], [80, 78], [72, 88]]);
+      p.line(2, 0x3a2a1a).seg(46, 20, 46, 70);
+    } else if (key === 'rifle') { // assault rifle with a scope
+      p.fill(0x1f2125).rrect(51, 0, 8, 46, 3); p.fill(0x111214).rect(49, 0, 12, 6);
+      p.fill(0x3a3d43).rrect(44, 40, 22, 40, 5); for (let i = 0; i < 3; i++) p.fill(0x22252b).rect(47, 46 + i * 11, 16, 5);
+      p.fill(0x2b2d31).rrect(40, 78, 30, 40, 6);
+      p.fill(0x111214).rrect(25, 58, 14, 48, 6); p.fill(0x29a8ff, 0.8).circle(32, 60, 4); p.fill(0x29a8ff, 0.5).circle(32, 104, 4);
+      p.fill(0x3e4148).poly([[70, 84], [86, 90], [84, 116], [70, 112]]);
+      p.fill(0x2b2d31).poly([[44, 118], [66, 118], [70, 148], [40, 148]]); p.fill(0x3e4148).rect(46, 126, 18, 4);
+    } else if (key === 'plasma') { // twin-prong plasma cannon
+      p.fill(0xff4fd8, 0.25).circle(55, 18, 22); p.fill(0xff4fd8, 0.7).circle(55, 18, 12); p.fill(0xffffff).circle(55, 18, 6);
+      p.fill(0x8e9aa8).rrect(26, 8, 14, 56, 6).rrect(70, 8, 14, 56, 6); p.fill(0xff4fd8).rect(30, 20, 6, 30).rect(74, 20, 6, 30);
+      p.fill(0x2b2f45).rrect(20, 50, 70, 70, 18); p.fill(0x3d4262).rrect(26, 56, 58, 58, 14);
+      p.fill(0xff4fd8, 0.4).circle(55, 85, 20); p.fill(0xff4fd8).circle(55, 85, 13); p.fill(0xffd6f5).circle(55, 85, 6);
+      p.fill(0xeef3f8).rrect(36, 116, 38, 22, 8); p.fill(0x7a5cff).rrect(40, 134, 30, 14, 6);
+      p.fill(0x29f0ff).rect(22, 74, 4, 22).rect(84, 74, 4, 22);
+    } else if (key === 'stone') { p.fill(0x4a2c12).ellipse(40, 14, 38, 16).circle(25, 20, 6).circle(55, 20, 6).circle(32, 9, 6).circle(48, 9, 6); p.fill(0x4a2c12).ellipse(40, 41, 22, 8); }
       if (key === 'bronze') { p.fill(0xcd7f32).rrect(22, 8, 36, 16, { tl: 16, tr: 16, bl: 2, br: 2 }); p.fill(0xc0392b).rrect(36, 0, 8, 12, 3); p.fill(0xa86424).rect(22, 21, 36, 3); }
       if (key === 'gunpowder') { p.fill(0x1b1b1b).tri(16, 16, 64, 16, 40, 2); p.fill(0x1b1b1b).rrect(24, 8, 32, 10, 4); p.fill(0xf1c40f).circle(40, 12, 2.5); }
       if (key === 'modern') { p.fill(0x4a5530).rrect(21, 8, 38, 16, { tl: 17, tr: 17, bl: 3, br: 3 }); p.fill(0x111111).rrect(27, 24, 26, 7, 3); }
@@ -84,7 +216,51 @@ function enemy(scene, key) {
 // ---------- blocks (90 x 80 logical) ----------
 function block(scene, key) {
   make(scene, 'block_' + key, 90, 80, (p) => {
-    if (key === 'stone') {
+    if (key === 'rock') { // a hand gripping a rock
+      p.fill(0xc98a5a).rrect(40, 86, 30, 64, 12); p.fill(0xa86f45).rect(40, 120, 30, 4);
+      p.fill(0x6e6a64).poly([[30, 52], [40, 26], [62, 18], [82, 32], [84, 58], [68, 76], [42, 74]]);
+      p.fill(0x9a958e).poly([[36, 50], [44, 30], [62, 24], [76, 34], [78, 54], [66, 68], [46, 68]]);
+      p.fill(0xc4c0b9).circle(52, 36, 5); p.fill(0x7f7a73).circle(68, 52, 4);
+      p.fill(0xd99a6a).rrect(32, 66, 48, 26, 12);
+      p.fill(0xb5784c); for (let i = 0; i < 3; i++) p.rect(43 + i * 12, 68, 2, 18);
+      p.fill(0xd99a6a).rrect(24, 54, 14, 30, 7);
+    } else if (key === 'javelin') { // a plain hand-thrown javelin
+      p.fill(0x9b6a35).rrect(51, 22, 8, 128, 4); p.fill(0xb98447).rect(53, 22, 2, 128);
+      p.fill(0x8a5a2b).poly([[55, 0], [64, 16], [60, 32], [50, 32], [46, 16]]); p.fill(0xcd7f32).poly([[55, 3], [61, 16], [58, 29], [52, 29], [49, 16]]);
+      p.fill(0xe7a95b).tri(55, 5, 52, 16, 55, 27);
+      p.fill(0x5a3a1a).rrect(48, 92, 14, 26, 4); p.fill(0x7a4a24).rect(48, 98, 14, 3).rect(48, 106, 14, 3);
+      p.fill(0xc0392b).rect(49, 34, 12, 4);
+    } else if (key === 'repeater') { // repeating crossbow with a bolt magazine on top
+      p.fill(0x7a4a24).rrect(46, 40, 18, 108, 6); p.fill(0x5a3a1a).rrect(44, 116, 22, 32, 6);
+      p.line(10, 0x4a2c12).spoly([[4, 70], [22, 52], [55, 44], [88, 52], [106, 70]]);
+      p.line(5, 0x8b5a2b).spoly([[6, 68], [22, 53], [55, 46], [88, 53], [104, 68]]);
+      p.line(2, 0xeeeeee).seg(6, 70, 55, 88).seg(104, 70, 55, 88);
+      p.fill(0x6b4423).rrect(40, 0, 30, 66, 5); p.fill(0x8b5a2b).rrect(43, 4, 24, 58, 4);
+      for (let i = 0; i < 5; i++) { p.fill(0xd9dee3).tri(47 + i * 4, 6, 45 + i * 4, 12, 49 + i * 4, 12); p.fill(0x3a2a1a).rect(46 + i * 4, 12, 2, 40); }
+      p.fill(0x2c6fbf).rect(43, 50, 24, 5);
+      p.line(5, 0x9aa4ad).seg(70, 30, 92, 96); p.fill(0x5a3a1a).circle(92, 98, 6);
+    } else if (key === 'musket') { // long flintlock musket
+      p.fill(0x6b4423).poly([[46, 70], [64, 70], [72, 148], [38, 148]]); p.fill(0x8b5a2b).poly([[49, 74], [61, 74], [66, 144], [44, 144]]);
+      p.fill(0x50565e).rrect(50, 0, 10, 100, 4); p.fill(0x7d848d).rect(52, 2, 3, 96);
+      p.fill(0x22252b).ellipse(55, 2, 10, 4);
+      p.fill(0xd4a017).rect(48, 30, 14, 4).rect(48, 64, 14, 4).rect(46, 118, 18, 4);
+      p.fill(0x3a3d43).rrect(62, 84, 12, 14, 3); p.fill(0x22252b).poly([[66, 84], [76, 74], [80, 78], [72, 88]]);
+      p.line(2, 0x3a2a1a).seg(46, 20, 46, 70);
+    } else if (key === 'rifle') { // assault rifle with a scope
+      p.fill(0x1f2125).rrect(51, 0, 8, 46, 3); p.fill(0x111214).rect(49, 0, 12, 6);
+      p.fill(0x3a3d43).rrect(44, 40, 22, 40, 5); for (let i = 0; i < 3; i++) p.fill(0x22252b).rect(47, 46 + i * 11, 16, 5);
+      p.fill(0x2b2d31).rrect(40, 78, 30, 40, 6);
+      p.fill(0x111214).rrect(25, 58, 14, 48, 6); p.fill(0x29a8ff, 0.8).circle(32, 60, 4); p.fill(0x29a8ff, 0.5).circle(32, 104, 4);
+      p.fill(0x3e4148).poly([[70, 84], [86, 90], [84, 116], [70, 112]]);
+      p.fill(0x2b2d31).poly([[44, 118], [66, 118], [70, 148], [40, 148]]); p.fill(0x3e4148).rect(46, 126, 18, 4);
+    } else if (key === 'plasma') { // twin-prong plasma cannon
+      p.fill(0xff4fd8, 0.25).circle(55, 18, 22); p.fill(0xff4fd8, 0.7).circle(55, 18, 12); p.fill(0xffffff).circle(55, 18, 6);
+      p.fill(0x8e9aa8).rrect(26, 8, 14, 56, 6).rrect(70, 8, 14, 56, 6); p.fill(0xff4fd8).rect(30, 20, 6, 30).rect(74, 20, 6, 30);
+      p.fill(0x2b2f45).rrect(20, 50, 70, 70, 18); p.fill(0x3d4262).rrect(26, 56, 58, 58, 14);
+      p.fill(0xff4fd8, 0.4).circle(55, 85, 20); p.fill(0xff4fd8).circle(55, 85, 13); p.fill(0xffd6f5).circle(55, 85, 6);
+      p.fill(0xeef3f8).rrect(36, 116, 38, 22, 8); p.fill(0x7a5cff).rrect(40, 134, 30, 14, 6);
+      p.fill(0x29f0ff).rect(22, 74, 4, 22).rect(84, 74, 4, 22);
+    } else if (key === 'stone') {
       p.fill(0x6e6a64).ellipse(45, 44, 88, 72); p.fill(0x8d8a85).ellipse(43, 40, 80, 64); p.fill(0xa9a6a0).ellipse(32, 28, 34, 20);
       p.line(3, 0x5c5852).spoly([[60, 20], [54, 36], [64, 48]]).spoly([[22, 52], [34, 58], [30, 68]]);
     } else if (key === 'bronze') {
@@ -116,7 +292,51 @@ function block(scene, key) {
 // ---------- weapons (110 x 150 logical, pointing up, base at bottom) ----------
 function weapon(scene, key) {
   make(scene, 'weapon_' + key, 110, 150, (p) => {
-    if (key === 'stone') {
+    if (key === 'rock') { // a hand gripping a rock
+      p.fill(0xc98a5a).rrect(40, 86, 30, 64, 12); p.fill(0xa86f45).rect(40, 120, 30, 4);
+      p.fill(0x6e6a64).poly([[30, 52], [40, 26], [62, 18], [82, 32], [84, 58], [68, 76], [42, 74]]);
+      p.fill(0x9a958e).poly([[36, 50], [44, 30], [62, 24], [76, 34], [78, 54], [66, 68], [46, 68]]);
+      p.fill(0xc4c0b9).circle(52, 36, 5); p.fill(0x7f7a73).circle(68, 52, 4);
+      p.fill(0xd99a6a).rrect(32, 66, 48, 26, 12);
+      p.fill(0xb5784c); for (let i = 0; i < 3; i++) p.rect(43 + i * 12, 68, 2, 18);
+      p.fill(0xd99a6a).rrect(24, 54, 14, 30, 7);
+    } else if (key === 'javelin') { // a plain hand-thrown javelin
+      p.fill(0x9b6a35).rrect(51, 22, 8, 128, 4); p.fill(0xb98447).rect(53, 22, 2, 128);
+      p.fill(0x8a5a2b).poly([[55, 0], [64, 16], [60, 32], [50, 32], [46, 16]]); p.fill(0xcd7f32).poly([[55, 3], [61, 16], [58, 29], [52, 29], [49, 16]]);
+      p.fill(0xe7a95b).tri(55, 5, 52, 16, 55, 27);
+      p.fill(0x5a3a1a).rrect(48, 92, 14, 26, 4); p.fill(0x7a4a24).rect(48, 98, 14, 3).rect(48, 106, 14, 3);
+      p.fill(0xc0392b).rect(49, 34, 12, 4);
+    } else if (key === 'repeater') { // repeating crossbow with a bolt magazine on top
+      p.fill(0x7a4a24).rrect(46, 40, 18, 108, 6); p.fill(0x5a3a1a).rrect(44, 116, 22, 32, 6);
+      p.line(10, 0x4a2c12).spoly([[4, 70], [22, 52], [55, 44], [88, 52], [106, 70]]);
+      p.line(5, 0x8b5a2b).spoly([[6, 68], [22, 53], [55, 46], [88, 53], [104, 68]]);
+      p.line(2, 0xeeeeee).seg(6, 70, 55, 88).seg(104, 70, 55, 88);
+      p.fill(0x6b4423).rrect(40, 0, 30, 66, 5); p.fill(0x8b5a2b).rrect(43, 4, 24, 58, 4);
+      for (let i = 0; i < 5; i++) { p.fill(0xd9dee3).tri(47 + i * 4, 6, 45 + i * 4, 12, 49 + i * 4, 12); p.fill(0x3a2a1a).rect(46 + i * 4, 12, 2, 40); }
+      p.fill(0x2c6fbf).rect(43, 50, 24, 5);
+      p.line(5, 0x9aa4ad).seg(70, 30, 92, 96); p.fill(0x5a3a1a).circle(92, 98, 6);
+    } else if (key === 'musket') { // long flintlock musket
+      p.fill(0x6b4423).poly([[46, 70], [64, 70], [72, 148], [38, 148]]); p.fill(0x8b5a2b).poly([[49, 74], [61, 74], [66, 144], [44, 144]]);
+      p.fill(0x50565e).rrect(50, 0, 10, 100, 4); p.fill(0x7d848d).rect(52, 2, 3, 96);
+      p.fill(0x22252b).ellipse(55, 2, 10, 4);
+      p.fill(0xd4a017).rect(48, 30, 14, 4).rect(48, 64, 14, 4).rect(46, 118, 18, 4);
+      p.fill(0x3a3d43).rrect(62, 84, 12, 14, 3); p.fill(0x22252b).poly([[66, 84], [76, 74], [80, 78], [72, 88]]);
+      p.line(2, 0x3a2a1a).seg(46, 20, 46, 70);
+    } else if (key === 'rifle') { // assault rifle with a scope
+      p.fill(0x1f2125).rrect(51, 0, 8, 46, 3); p.fill(0x111214).rect(49, 0, 12, 6);
+      p.fill(0x3a3d43).rrect(44, 40, 22, 40, 5); for (let i = 0; i < 3; i++) p.fill(0x22252b).rect(47, 46 + i * 11, 16, 5);
+      p.fill(0x2b2d31).rrect(40, 78, 30, 40, 6);
+      p.fill(0x111214).rrect(25, 58, 14, 48, 6); p.fill(0x29a8ff, 0.8).circle(32, 60, 4); p.fill(0x29a8ff, 0.5).circle(32, 104, 4);
+      p.fill(0x3e4148).poly([[70, 84], [86, 90], [84, 116], [70, 112]]);
+      p.fill(0x2b2d31).poly([[44, 118], [66, 118], [70, 148], [40, 148]]); p.fill(0x3e4148).rect(46, 126, 18, 4);
+    } else if (key === 'plasma') { // twin-prong plasma cannon
+      p.fill(0xff4fd8, 0.25).circle(55, 18, 22); p.fill(0xff4fd8, 0.7).circle(55, 18, 12); p.fill(0xffffff).circle(55, 18, 6);
+      p.fill(0x8e9aa8).rrect(26, 8, 14, 56, 6).rrect(70, 8, 14, 56, 6); p.fill(0xff4fd8).rect(30, 20, 6, 30).rect(74, 20, 6, 30);
+      p.fill(0x2b2f45).rrect(20, 50, 70, 70, 18); p.fill(0x3d4262).rrect(26, 56, 58, 58, 14);
+      p.fill(0xff4fd8, 0.4).circle(55, 85, 20); p.fill(0xff4fd8).circle(55, 85, 13); p.fill(0xffd6f5).circle(55, 85, 6);
+      p.fill(0xeef3f8).rrect(36, 116, 38, 22, 8); p.fill(0x7a5cff).rrect(40, 134, 30, 14, 6);
+      p.fill(0x29f0ff).rect(22, 74, 4, 22).rect(84, 74, 4, 22);
+    } else if (key === 'stone') {
       p.line(14, 0x7a4a24).seg(55, 100, 30, 38).seg(55, 100, 80, 38);
       p.line(8, 0x9b6a35).seg(55, 100, 31, 40).seg(55, 100, 79, 40);
       p.fill(0x7a4a24).rrect(47, 92, 16, 56, 7); p.fill(0x5a3a1a).rect(47, 110, 16, 5).rect(47, 122, 16, 5).rect(47, 134, 16, 5);
@@ -157,6 +377,12 @@ function weapon(scene, key) {
 }
 
 function projectiles(scene) {
+  make(scene, 'p_pebble', 22, 22, (p) => { p.fill(0x5c5852).poly([[3, 8], [9, 1], [18, 3], [21, 12], [15, 21], [5, 19]]); p.fill(0x8d8a85).poly([[5, 9], [10, 4], [17, 5], [18, 12], [14, 18], [7, 16]]); p.fill(0xb5b1aa).circle(9, 8, 2.5); });
+  make(scene, 'p_javelin', 10, 64, (p) => { p.fill(0x9b6a35).rect(4, 14, 3, 50); p.fill(0xcd7f32).poly([[5.5, 0], [9, 8], [7, 16], [4, 16], [2, 8]]); });
+  make(scene, 'p_rbolt', 8, 30, (p) => { p.fill(0x3a2a1a).rect(3, 6, 2.5, 24); p.fill(0xd9dee3).tri(4, 0, 1, 8, 7, 8); p.fill(0x2c6fbf).tri(3, 23, 0, 30, 3, 29).tri(5, 23, 8, 30, 5, 29); });
+  make(scene, 'p_musket', 16, 16, (p) => { p.fill(0xffffff, 0.35).circle(8, 8, 8); p.fill(0x6f747b).circle(8, 8, 4.5); p.fill(0xb0b5bb).circle(7, 7, 1.8); });
+  make(scene, 'p_round', 8, 26, (p) => { p.fill(0xff9a2e, 0.4).rrect(0, 4, 8, 22, 4); p.fill(0xffd27a).rrect(2, 6, 4, 18, 2); p.fill(0xfff6cc).rrect(2.5, 6, 3, 6, 1.5); });
+  make(scene, 'p_plasma', 30, 30, (p) => { p.fill(0xff4fd8, 0.3).circle(15, 15, 15); p.fill(0xff4fd8, 0.85).circle(15, 15, 10); p.fill(0xffd6f5).circle(15, 15, 5); });
   make(scene, 'p_rock', 18, 18, (p) => { p.fill(0x6e6a64).circle(9, 9, 8); p.fill(0x9a958e).circle(8, 8, 6.5); p.fill(0xc4c0b9).circle(6, 6, 2.5); });
   make(scene, 'p_spear', 10, 50, (p) => { p.fill(0x9b6a35).rect(4, 10, 3, 40); p.fill(0xcd7f32).tri(5.5, 0, 1, 14, 10, 14); p.fill(0xc0392b).tri(5, 40, 0, 50, 5, 47).tri(6, 40, 10, 50, 6, 47); });
   make(scene, 'p_bolt', 10, 38, (p) => { p.fill(0x3a2a1a).rect(4, 8, 3, 30); p.fill(0xd9dee3).tri(5.5, 0, 1.5, 10, 9.5, 10); p.fill(0xc0392b).tri(4, 30, 0, 38, 4, 36).tri(7, 30, 10, 38, 7, 36); });
@@ -269,7 +495,8 @@ function icons(scene) {
 export class BootScene extends Phaser.Scene {
   constructor() { super('boot'); }
   create() {
-    ERAS.forEach((e) => { enemy(this, e.key); block(this, e.key); weapon(this, e.key); });
+    ERAS.forEach((e) => { enemy(this, e.key); block(this, e.key); });
+    WEAPONS.forEach((w) => weapon(this, w.key));
     projectiles(this);
     misc(this);
     bosses(this);

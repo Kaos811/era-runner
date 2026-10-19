@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { ERAS, eraDps } from './eras.js';
+import { ERAS, tierDps } from './eras.js';
 import { style } from './ui.js';
 import { Sound } from './audio.js';
 
@@ -24,12 +24,13 @@ export const BOSS_HOME_Z = 450;
 // the geometric mean of the player's DPS and a reference DPS for that era. A stronger weapon
 // (better gates, upgrades) still finishes the fight faster, a weak one isn't stuck forever.
 export const BOSS_SECONDS = 15;
-const REF_DPS_FUTURE = 1800;
+// a typical player arrives with ~37x their weapon's base DPS (gates + extra shots)
+const REF_BOOST = 37;
 const DMG = { proj: 25, charge: 35, beam: 30 };
 const laneOf = (x) => LANES.reduce((a, b) => (Math.abs(b - x) < Math.abs(a - x) ? b : a));
 
-export const bossHpFor = (era, playerDps) => {
-  const ref = (REF_DPS_FUTURE * eraDps(era)) / eraDps(5);
+export const bossHpFor = (tier, playerDps) => {
+  const ref = REF_BOOST * tierDps(tier);
   return Math.round(BOSS_SECONDS * Math.sqrt(ref * Math.max(1, playerDps)));
 };
 
@@ -47,7 +48,7 @@ export const BossMethods = {
     shield.lineStyle(12, 0xbff6ff, 0.9).strokeEllipse(0, -225, 600, 520);
     shield.setAlpha(0);
     c.add([sh, img, shield]);
-    const hp = bossHpFor(era, this.rate * this.dmg * this.shots);
+    const hp = bossHpFor(this.tier, this.rate * this.dmg * this.shots);
     const obj = { type: 'boss', c, img, shield, x: 0, z: 1750, halfW: 170, hittable: true, size: 2, eraLook: era };
     this.objs.push(obj);
     this.boss = { def, era, obj, hp, maxHp: hp, t: 0, phase: 'enter', nextAt: 0, busy: 0, events: [], shields: [0.66, 0.33], shieldUntil: 0, charge: null, attackIdx: 0, startTime: this.time };

@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
-import { ERAS, eraDps } from '../eras.js';
-import { buildLevel, HP_MULT } from '../level.js';
+import { ERAS, WEAPONS, MAX_TIER, tierDps } from '../eras.js';
+import { sectionRef, buildLevel, HP_MULT } from '../level.js';
 import { Save } from '../save.js';
 import { runMods } from '../upgrades.js';
 import { Sound } from '../audio.js';
@@ -12,6 +12,9 @@ import { style, col } from '../ui.js';
 const W = 540, H = 960, CX = 270;
 const HY = 300;          // horizon line (screen y at infinite distance)
 const PY = 830;          // screen y of the ground under the player
+// XP gems are picked up when they pass within GEM_REACH_X of the weapon (lanes are 150 apart)
+const COMBO_GAIN = 0.05, COMBO_MISS = 0.3;
+const GEM_REACH_X = 62, GEM_REACH_Z = 150, GEM_SPREAD = 40, HOMING = 18;
 const D = 380;           // camera distance: scale = D / (D + z)
 const HALF = 235;        // half track width at the player
 const FAR = 6000;        // how far the track is drawn
@@ -93,27 +96,34 @@ export class GameScene extends Phaser.Scene {
     this.qi = 0;
     this.objs = [];
     this.projs = [];
+    (this.gems || []).forEach((g) => g.img?.destroy());
+    this.gems = [];
+    this.combo = 0;
     this.d = 0; this.px = 0; this.tx = 0;
     this.mods = runMods(this.testUpg || Save.data.upg);
     this.maxHp = this.mods.maxHp; this.hp = this.maxHp;
-    this.era = 0; this.xp = 0;
+    this.tier = 0; this.xp = 0;
     this.runSpeed = RUN; this.runCoins = 0;
     if (this.boss) { this.bprojs?.forEach((p) => p.img?.destroy()); }
     this.boss = null; this.bossWarns = []; this.bprojs = [];
     this.showBossBar?.(false);
     this.rateB = 0; this.dmgB = 0; this.extra = 0;
     this.fireT = 0.3; this.time = 0; this.lastHurt = -99; this.recoil = 0;
-    this.stats = { kills: 0, blocks: 0, gates: 0, damage: 0, hitsTaken: 0, hurtBySection: [0, 0, 0, 0, 0, 0], coins: 0 };
+    this.stats = { kills: 0, blocks: 0, gates: 0, damage: 0, hitsTaken: 0, gems: 0, gemsMissed: 0, hurtBySection: [0, 0, 0, 0, 0, 0], coins: 0 };
     this.eraTimes = [0];
+    this.tierTimes = [0];
     this.finishPassed = false;
     this.finishZ = this.level.finish;
     this.setEraVisuals(0, true);
-    this.weaponImg.setTexture('weapon_' + ERAS[0].key);
+    this.weaponImg.setTexture('weapon_' + WEAPONS[0].key);
     this.updateHud(true);
   }
 
-  get rate() { return ERAS[this.era].rate * Math.max(0.4, 1 + this.rateB / 100) * this.mods.rateMul; }
-  get dmg() { return ERAS[this.era].dmg * Math.max(0.4, 1 + this.dmgB / 100) * this.mods.dmgMul; }
+  // era (scenery, enemies, boss) follows the weapon tier: two weapons per era
+  get era() { return this.tier >> 1; }
+  get weapon() { return WEAPONS[this.tier]; }
+  get rate() { return this.weapon.rate * Math.max(0.4, 1 + this.rateB / 100) * this.mods.rateMul; }
+  get dmg() { return this.weapon.dmg * Math.max(0.4, 1 + this.dmgB / 100) * this.mods.dmgMul; }
   get shots() { return Phaser.Math.Clamp(1 + this.extra, 1, 5); }
 
   // ------------------------------------------------------------------ input
@@ -168,7 +178,7 @@ export class GameScene extends Phaser.Scene {
       o.z -= (this.runSpeed + (o.walk || 0)) * dt;
       if (o.type === 'enemy' && o.z < 1100 && o.z > 60) {
         const dx = this.px - o.x;
-        o.x += Math.sign(dx) * Math.min(Math.abs(dx), 32 * dt);
+        o.x += Math.sign(dx) * Math.min(Math.abs(dx), HOMING * dt);
       }
       if (o.flash > 0) o.flash -= dt;
     }
@@ -177,6 +187,7 @@ export class GameScene extends Phaser.Scene {
     this.fireT -= dt;
     while (this.fireT <= 0) { this.fire(); this.fireT += 1 / this.rate; }
 
+    this.stepGems(dt);
     if (this.boss) { this.bossStep(dt); if (this.mode !== 'play') return; }
 
     // projectiles
@@ -220,15 +231,15 @@ export class GameScene extends Phaser.Scene {
   }
 
   fire() {
-    const e = ERAS[this.era];
+    const e = this.weapon;
     const n = this.shots;
-    const spacing = e.key === 'gunpowder' ? 30 : 22;
+    const spacing = e.spacing;
     for (let i = 0; i < n; i++) {
       const x = this.px + (i - (n - 1) / 2) * spacing;
       const img = this.add.image(0, 0, 'p_' + e.proj).setOrigin(0.5, 0.5);
       this.projs.push({ img, x, z: 40, speed: e.pspeed, r: e.pr, dmg: this.dmg });
     }
-    this.recoil = e.key === 'gunpowder' ? 12 : 6;
+    this.recoil = e.recoil;
     if (!this.simulating) Sound.play('shot_' + e.key);
   }
 
@@ -255,7 +266,6 @@ export class GameScene extends Phaser.Scene {
     const dealt = Math.min(p.dmg, o.hp);
     o.hp -= p.dmg;
     this.stats.damage += dealt;
-    this.gainXp(dealt);
     if (o.hp <= 0.0001) {
       this.kill(o, true);
     } else {
@@ -269,6 +279,7 @@ export class GameScene extends Phaser.Scene {
     if (byShot) {
       if (o.type === 'enemy') this.stats.kills++; else this.stats.blocks++;
       this.addCoins(o.type === 'block' ? 2 : o.size > 1.3 ? 3 : 1, o);
+      this.dropGems(o);
     }
     if (this.simulating) return;
     Sound.play(o.type === 'block' ? 'smash' : 'kill');
@@ -280,36 +291,81 @@ export class GameScene extends Phaser.Scene {
       const a = Math.random() * Math.PI * 2, r = (40 + Math.random() * 50) * pr.s;
       this.tweens.add({ targets: dot, x: pr.x + Math.cos(a) * r, y: pr.y - 40 * pr.s + Math.sin(a) * r, alpha: 0, scale: 0.1, duration: 380, onComplete: () => dot.destroy() });
     }
-    if (byShot) {
-      const gems = o.type === 'block' ? 3 : 1 + Math.floor(o.size);
-      for (let i = 0; i < gems; i++) {
-        const gem = this.add.image(pr.x + (i - gems / 2) * 10, pr.y - 30 * pr.s, 'gem').setScale(0.6);
-        this.fx.add(gem);
-        this.tweens.add({ targets: gem, x: 60 + this.xpFrac() * 420, y: 122 + (this.hudY || 0), scale: 0.35, duration: 520 + i * 60, ease: 'Cubic.easeIn', onComplete: () => { gem.destroy(); this.pulseXp(); } });
+  }
+
+  // XP gems drop where an enemy/block dies and lie on the track: steer within reach to pick them up.
+  // XP is the target's full (nominal) HP, split over its gems; gems you miss are lost.
+  dropGems(o) {
+    const n = o.type === 'block' ? 3 : 1 + Math.floor(o.size);
+    const xp = (o.xpVal ?? o.maxHp) / n;
+    for (let i = 0; i < n; i++) {
+      this.gems.push({ x: Phaser.Math.Clamp(o.x + (i - (n - 1) / 2) * GEM_SPREAD + (Math.random() - 0.5) * GEM_SPREAD, -MAX_X, MAX_X), z: Math.max(o.z, 60) + i * 14, xp, pull: false, img: null, t: Math.random() * 6 });
+    }
+  }
+
+  stepGems(dt) {
+    for (const g of this.gems) {
+      if (g.dead) continue;
+      if (this.boss) g.pull = true; // the arena hoovers up whatever is left
+      if (!g.pull) {
+        g.z -= this.runSpeed * dt;
+        if (g.z < GEM_REACH_Z && g.z > -30 && Math.abs(g.x - this.px) < GEM_REACH_X) g.pull = true;
+        else if (g.z < -60) { g.dead = true; this.stats.gemsMissed++; this.combo = Math.max(0, this.combo - COMBO_MISS); continue; }
+      }
+      if (g.pull) {
+        const k = Math.min(1, dt * 9);
+        g.x += (this.px - g.x) * k;
+        g.z += (0 - g.z) * k - 200 * dt;
+        if (g.z < 15) { g.dead = true; this.collectGem(g); }
       }
     }
+    this.gems = this.gems.filter((g) => { if (g.dead) g.img?.destroy(); return !g.dead; });
+  }
+
+  // pickup streak: every gem raises the XP bonus a little (up to x2), every missed gem knocks it down
+  get xpMul() { return 1 + this.combo; }
+  collectGem(g) {
+    this.stats.gems++;
+    this.gainXp(g.xp * this.xpMul);
+    this.combo = Math.min(1, this.combo + COMBO_GAIN);
+    if (this.simulating) return;
+    Sound.play('gem');
+    const pr = project(g.x, Math.max(g.z, 0));
+    const gem = this.add.image(pr.x, pr.y - 20, 'gem').setScale(0.6);
+    this.fx.add(gem);
+    this.tweens.add({ targets: gem, x: 60 + this.xpFrac() * 420, y: 122 + (this.hudY || 0), scale: 0.35, duration: 420, ease: 'Cubic.easeIn', onComplete: () => { gem.destroy(); this.pulseXp(); } });
   }
 
   gainXp(v) {
     this.xp += v;
+    if (this.boss) return; // the weapon is locked in once the boss fight starts
     const need = this.level.need;
-    while (this.era < 5 && this.xp >= need[this.era]) {
-      this.xp -= need[this.era];
+    while (this.tier < MAX_TIER && this.xp >= need[this.tier]) {
+      this.xp -= need[this.tier];
       this.evolve();
     }
   }
 
+  // Next weapon. Odd tiers are the second weapon of the same era ("UPGRADED!"),
+  // even tiers start a new era ("EVOLVED!" + new scenery).
   evolve() {
-    this.era++;
-    this.eraTimes.push(this.time);
-    const e = ERAS[this.era];
+    this.tier++;
+    this.tierTimes.push(this.time);
+    const newEra = this.tier % 2 === 0;
+    if (newEra) this.eraTimes.push(this.time);
     if (this.simulating) return;
-    this.weaponImg.setTexture('weapon_' + e.key);
-    this.tweens.add({ targets: this.weaponImg, scale: { from: TK * 1.6, to: TK }, duration: 420, ease: 'Back.easeOut' });
-    this.cameras.main.flash(260, 255, 255, 255);
-    Sound.play('evolve');
-    this.setEraVisuals(this.era, false);
-    this.banner(`${e.name}!`, `New weapon: ${e.weapon}`, e.ui);
+    const w = this.weapon, e = ERAS[this.era];
+    this.weaponImg.setTexture('weapon_' + w.key);
+    this.tweens.add({ targets: this.weaponImg, scale: { from: TK * (newEra ? 1.6 : 1.35), to: TK }, duration: 420, ease: 'Back.easeOut' });
+    if (newEra) {
+      this.cameras.main.flash(260, 255, 255, 255);
+      Sound.play('evolve');
+      this.setEraVisuals(this.era, false);
+      this.banner(`${e.name}!`, `New weapon: ${w.name}`, e.ui);
+    } else {
+      Sound.play('upgrade');
+      this.smallBanner(w.name.toUpperCase(), e.ui);
+    }
     this.updateHud(true);
   }
 
@@ -356,9 +412,9 @@ export class GameScene extends Phaser.Scene {
     if (it.type === 'enemy' || it.type === 'block') {
       // Catch-up: if the player is behind the curve (wrong gates, missed evolutions), soften this
       // section's enemies so a struggling run can still recover instead of snowballing.
-      const expected = eraDps(it.section) * HP_MULT[it.section] * 1.6;
+      const expected = sectionRef(it.section) * HP_MULT[it.section] * 1.6;
       const ease = Phaser.Math.Clamp((this.rate * this.dmg * this.shots) / expected, 0.35, 1);
-      it = { ...it, hp: Math.max(1, Math.round(it.hp * ease)) };
+      it = { ...it, xpVal: it.hp, hp: Math.max(1, Math.round(it.hp * ease)) };
       const c = this.add.container(0, 0);
       const isE = it.type === 'enemy';
       const sh = this.add.image(0, 0, 'shadow').setScale(TK * (isE ? 0.9 : 1.1) * it.size, TK * it.size);
@@ -366,7 +422,7 @@ export class GameScene extends Phaser.Scene {
       const hpText = this.add.text(0, isE ? -138 * it.size : -46, String(it.hp), style(isE ? 28 : 32, '#ffffff', 6)).setOrigin(0.5);
       c.add([sh, img, hpText]);
       if (it.size > 1.3 && isE) img.setTint(0xffd0c0);
-      this.objs.push({ type: it.type, section: it.section, c, img, hpText, x: it.x, z, hp: it.hp, maxHp: it.hp, size: it.size, dmg: it.dmg, halfW: (isE ? 36 : 50) * it.size,
+      this.objs.push({ type: it.type, section: it.section, c, img, hpText, x: it.x, z, hp: it.hp, maxHp: it.hp, xpVal: it.xpVal, size: it.size, dmg: it.dmg, halfW: (isE ? 36 : 50) * it.size,
         walk: isE ? 45 : 0, hittable: true, eraLook: look, bob: Math.random() * 6 });
     } else if (it.type === 'gate') {
       const pair = { used: false, objs: [] };
@@ -427,6 +483,12 @@ export class GameScene extends Phaser.Scene {
       } else if (o.type === 'gate') {
         o.panel.setAlpha(o.flash > 0 ? 1 : 0.92);
       }
+    }
+    for (const g of this.gems) {
+      if (!g.img) g.img = this.add.image(0, 0, 'gem');
+      const pr = project(g.x, Math.max(g.z, -100));
+      const bob = Math.sin(this.time * 6 + g.t) * 6;
+      g.img.setPosition(pr.x, pr.y - (24 + bob) * pr.s).setScale(TK * 2.1 * pr.s).setDepth(10 + FAR - g.z);
     }
     this.renderBoss();
     for (const p of this.projs) {
@@ -596,24 +658,20 @@ export class GameScene extends Phaser.Scene {
     wrap(this.add.text(375, 34, 'BOSS', style(13, '#ff8a80', 3)).setOrigin(1, 0.5));
     wrap(this.add.image(250, 34, 'coin').setScale(0.55));
     this.coinText = wrap(this.add.text(266, 34, '0', style(18, '#ffe14d', 4)).setOrigin(0, 0.5));
-    this.eraIcon = wrap(this.add.image(46, 82, 'weapon_stone').setScale(0.22));
+    this.eraIcon = wrap(this.add.image(46, 82, 'weapon_rock').setScale(0.22));
     this.eraText = wrap(this.add.text(78, 70, '', style(28, '#ffffff', 6)).setOrigin(0, 0.5));
     this.weapText = wrap(this.add.text(80, 96, '', style(15, '#ffe9b0', 4)).setOrigin(0, 0.5));
     this.statText = wrap(this.add.text(518, 82, '', style(14, '#ffffff', 4, { align: 'right', lineSpacing: 1 })).setOrigin(1, 0.5));
     this.xpText = wrap(this.add.text(270, 124, '', style(14, '#ffffff', 4)).setOrigin(0.5));
-    // era timeline
-    this.timeline = ERAS.map((e, i) => {
-      const x = 62 + i * 83;
-      const img = wrap(this.add.image(x, 160, 'weapon_' + e.key).setScale(0.13));
-      return img;
-    });
+    // era timeline: one icon per era (showing that era's current weapon) with 2 pips for its 2 weapons
+    this.timeline = ERAS.map((e, i) => wrap(this.add.image(62 + i * 83, 155, 'weapon_' + WEAPONS[i * 2].key).setScale(0.1)));
     this.hurtFlash = this.add.rectangle(0, 0, W, H, 0xff0000, 0).setOrigin(0).setDepth(D0 - 10);
     this.hudDirty = true;
   }
 
   xpFrac() {
-    if (this.era >= 5) return 1;
-    return Phaser.Math.Clamp(this.xp / this.level.need[this.era], 0, 1);
+    if (this.tier >= MAX_TIER) return 1;
+    return Phaser.Math.Clamp(this.xp / this.level.need[this.tier], 0, 1);
   }
 
   pulseXp() { this.xpPulse = 1; }
@@ -638,20 +696,32 @@ export class GameScene extends Phaser.Scene {
     if (xf > 0) g.fillStyle(e.ui, 1).fillRoundedRect(20, 112 - grow, Math.max(20, 500 * xf), 24 + grow * 2, 10);
     g.fillStyle(0xffffff, 0.18).fillRoundedRect(24, 114 - grow, Math.max(12, 492 * xf), 8, 4);
     // timeline highlight
-    g.fillStyle(e.ui, 0.9).fillRoundedRect(62 + this.era * 83 - 30, 146, 60, 28, 10);
-    for (let i = 0; i < 5; i++) { g.fillStyle(i < this.era ? 0xffffff : 0x777777, 0.8); g.fillTriangle(62 + i * 83 + 36, 156, 62 + i * 83 + 36, 164, 62 + i * 83 + 44, 160); }
+    g.fillStyle(e.ui, 0.9).fillRoundedRect(62 + this.era * 83 - 32, 139, 64, 42, 10);
+    for (let i = 0; i < 6; i++) {
+      const x = 62 + i * 83;
+      if (i < 5) { g.fillStyle(i < this.era ? 0xffffff : 0x777777, 0.8); g.fillTriangle(x + 36, 154, x + 36, 162, x + 44, 158); }
+      for (let j = 0; j < 2; j++) {
+        const have = i * 2 + j <= this.tier;
+        g.fillStyle(0x000000, 0.6).fillCircle(x - 6 + j * 12, 175.5, 4.2);
+        g.fillStyle(have ? 0xffe14d : 0x555555, 1).fillCircle(x - 6 + j * 12, 175.5, 3);
+      }
+    }
 
     this.hpText.setText(`${Math.ceil(this.hp)} / ${this.maxHp}`);
     const cs = String(this.runCoins);
     if (this.coinText.text !== cs) this.coinText.setText(cs);
-    const xpLabel = this.era >= 5 ? 'MAX ERA REACHED!' : `XP ${Math.floor(this.xp)} / ${this.level.need[this.era]}   NEXT: ${ERAS[this.era + 1].name}`;
+    const next = WEAPONS[this.tier + 1];
+    const xpLabel = !next ? 'MAX WEAPON REACHED!' : `XP ${Math.floor(Math.min(this.xp, this.level.need[this.tier]))} / ${this.level.need[this.tier]}   NEXT: ${next.name.toUpperCase()}`;
     this.xpText.setText(xpLabel);
-    if (force || this.hudEra !== this.era) {
-      this.hudEra = this.era;
+    if (force || this.hudTier !== this.tier) {
+      this.hudTier = this.tier;
       this.eraText.setText(e.name);
-      this.weapText.setText(e.weapon.toUpperCase());
-      this.eraIcon.setTexture('weapon_' + e.key);
-      this.timeline.forEach((img, i) => { img.setAlpha(i <= this.era ? 1 : 0.35); img.setScale(i === this.era ? 0.17 : 0.13); });
+      this.weapText.setText(`${this.weapon.name.toUpperCase()}  ${'★'.repeat((this.tier & 1) + 1)}`);
+      this.eraIcon.setTexture('weapon_' + this.weapon.key);
+      this.timeline.forEach((img, i) => {
+        img.setTexture('weapon_' + WEAPONS[i === this.era ? this.tier : i < this.era ? i * 2 + 1 : i * 2].key);
+        img.setAlpha(i <= this.era ? 1 : 0.35); img.setScale(i === this.era ? 0.115 : 0.1);
+      });
     }
     const st = `DMG ${this.dmg.toFixed(1)}\nRATE ${this.rate.toFixed(1)}/s\nSHOTS ${this.shots}`;
     if (st !== this.lastSt) { this.lastSt = st; this.statText.setText(st); }
@@ -679,6 +749,22 @@ export class GameScene extends Phaser.Scene {
     this.tweens.add({ targets: c, alpha: 0, delay: 1500, duration: 400, onComplete: () => c.destroy() });
   }
 
+  // smaller banner for a weapon upgrade inside the same era
+  smallBanner(name, color) {
+    if (this.bannerC?.active) this.bannerC.destroy();
+    const c = this.add.container(W / 2, 400).setDepth(8600);
+    this.bannerC = c;
+    const bg = this.add.graphics();
+    bg.fillStyle(0x000000, 0.5).fillRoundedRect(-170, -40, 340, 80, 18);
+    bg.lineStyle(3, color, 1).strokeRoundedRect(-170, -40, 340, 80, 18);
+    const a = this.add.text(0, -16, 'UPGRADED!', style(18, '#7dff9a', 4)).setOrigin(0.5);
+    const b = this.add.text(0, 12, name, style(name.length > 14 ? 24 : 28, '#ffffff', 6)).setOrigin(0.5);
+    c.add([bg, a, b]);
+    c.setScale(0.4);
+    this.tweens.add({ targets: c, scale: 1, duration: 250, ease: 'Back.easeOut' });
+    this.tweens.add({ targets: c, alpha: 0, delay: 1100, duration: 350, onComplete: () => c.destroy() });
+  }
+
   // ------------------------------------------------------------------ run start / end
   startRun() {
     if (this.mode === 'play') return;
@@ -698,7 +784,7 @@ export class GameScene extends Phaser.Scene {
       this.gainXp(this.mods.startXp);
       this.simulating = sim;
       this.setEraVisuals(this.era, true);
-      this.weaponImg.setTexture('weapon_' + ERAS[this.era].key);
+      this.weaponImg.setTexture('weapon_' + this.weapon.key);
     }
     this.updateHud(true);
     if (this.simulating) return;
@@ -738,16 +824,17 @@ export class GameScene extends Phaser.Scene {
     const raw = Math.round(this.runCoins * this.mods.coinMul);
     const coins = won ? raw : Math.ceil(raw / 2);
     const best = Save.data.best;
-    const newBest = this.era > best.era;
+    const newBest = this.tier > best.tier;
     Save.data.coins += coins;
     best.era = Math.max(best.era, this.era);
+    best.tier = Math.max(best.tier, this.tier);
     best.runs++;
     if (won) { best.wins++; best.bossKills[this.boss.era]++; }
     best.bestCoins = Math.max(best.bestCoins, coins);
     if (!this.noSave) Save.write();
     this.stats.coins = coins;
     const pct = Math.round(Phaser.Math.Clamp(this.d / this.level.finish, 0, 1) * 100);
-    this.lastResult = { won, era: this.era, coins, coinsRaw: raw, kills: this.stats.kills, blocks: this.stats.blocks, gates: this.stats.gates, hp: this.hp,
+    this.lastResult = { won, era: this.era, tier: this.tier, coins, coinsRaw: raw, kills: this.stats.kills, blocks: this.stats.blocks, gates: this.stats.gates, hp: this.hp,
       time: this.time, pct, bossName: this.boss?.def.name, bossTime: this.stats.bossTime || 0, newBest };
     this.mode = won ? 'won' : 'lost';
     this.dragging = false;
@@ -788,6 +875,9 @@ export class GameScene extends Phaser.Scene {
     }
     const enemies = this.objs.filter((o) => o.type === 'enemy' && !o.dead && o.z > 30 && o.z < 1400).sort((a, b) => a.z - b.z);
     let target = enemies.length ? enemies[0].x : 0;
+    // go for XP gems lying ahead when they're closer than the next enemy (sloppier bots notice less often)
+    const gem = this.gems.filter((g) => !g.pull && g.z > 0 && g.z < 420).sort((a, b) => a.z - b.z)[0];
+    if (gem && (!casual || !enemies.length || gem.z < enemies[0].z) && Math.random() < (human ? 0.45 : casual ? 0.75 : 1)) target = gem.x;
     if (!casual) {
       const blocks = this.objs.filter((o) => o.type === 'block' && !o.dead && o.z > 0 && o.z < 600);
       const danger = (x) => blocks.some((b) => Math.abs(b.x - x) < b.halfW + 45 && b.hp > this.dmg * this.rate * this.shots * (b.z / RUN));
@@ -824,14 +914,15 @@ export class GameScene extends Phaser.Scene {
       start: () => s.startRun(),
       setBot: (b) => { s.bot = b; },
       // testing/screenshots: skip to the boss arena with the weapon in a given era
-      jumpToBoss: (era, boosts = { rate: 40, dmg: 40, extra: 2 }) => {
+      // (era 0-5 uses that era's second weapon; pass tier to pick an exact weapon)
+      jumpToBoss: (era, boosts = { rate: 40, dmg: 40, extra: 2 }, tier = era * 2 + 1) => {
         s.closeScreen(); s.mode = 'won'; s.startRun();
         s.objs.forEach((o) => { o.dead = true; });
         s.qi = s.level.items.length;
-        s.era = era; s.xp = 0;
+        s.tier = tier; s.xp = 0;
         s.rateB = boosts.rate; s.dmgB = boosts.dmg; s.extra = boosts.extra;
         s.setEraVisuals(era, true);
-        s.weaponImg.setTexture('weapon_' + ERAS[era].key);
+        s.weaponImg.setTexture('weapon_' + s.weapon.key);
         s.d = s.level.finish - 125;
         s.updateHud(true);
       },
@@ -848,8 +939,8 @@ export class GameScene extends Phaser.Scene {
         const k = r.width / s.scale.gameSize.width;
         return { x: r.x + (m.tx - cam.worldView.x) * cam.zoom * k, y: r.y + (m.ty - cam.worldView.y) * cam.zoom * k };
       },
-      state: () => ({ mode: s.mode, boss: s.boss ? { name: s.boss.def.name, hp: s.boss.hp, maxHp: s.boss.maxHp, phase: s.boss.phase, t: s.boss.t } : null, coins: s.runCoins, savedCoins: Save.data.coins, maxHp: s.maxHp, era: s.era, eraName: ERAS[s.era].name, xp: s.xp, hp: s.hp, d: s.d, finish: s.level.finish, time: s.time,
-        rate: s.rate, dmg: s.dmg, shots: s.shots, stats: { ...s.stats }, eraTimes: [...s.eraTimes], objs: s.objs.length, projs: s.projs.length }),
+      state: () => ({ mode: s.mode, boss: s.boss ? { name: s.boss.def.name, hp: s.boss.hp, maxHp: s.boss.maxHp, phase: s.boss.phase, t: s.boss.t } : null, coins: s.runCoins, savedCoins: Save.data.coins, maxHp: s.maxHp, era: s.era, eraName: ERAS[s.era].name, tier: s.tier, weapon: s.weapon.name, need: s.level.need, xp: s.xp, hp: s.hp, d: s.d, finish: s.level.finish, time: s.time,
+        rate: s.rate, dmg: s.dmg, shots: s.shots, stats: { ...s.stats }, eraTimes: [...s.eraTimes], tierTimes: [...s.tierTimes], objs: s.objs.length, projs: s.projs.length }),
       // fast-forward the simulation (headless) with the current bot steering
       sim: (seconds, opts = {}) => {
         const wasPlaying = s.mode === 'play';
@@ -858,7 +949,7 @@ export class GameScene extends Phaser.Scene {
         for (let i = 0; i < steps && s.mode === 'play'; i++) { if (s.bot) s.botSteer(1 / 60); s.step(1 / 60); }
         s.simulating = false;
         s.setEraVisuals(s.era, true);
-        s.weaponImg.setTexture('weapon_' + ERAS[s.era].key);
+        s.weaponImg.setTexture('weapon_' + s.weapon.key);
         s.updateHud(true);
         if (wasPlaying && !opts.visual && s.mode !== 'play' && s.lastResult) s.showEnd(s.lastResult);
         return window.__ER.state();

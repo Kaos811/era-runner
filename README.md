@@ -1,9 +1,16 @@
 # Era Runner
 
 A one-thumb lane runner for phones: your weapon runs forward and fires on its own, you drag left/right to steer,
-and every enemy you defeat gives XP. Fill the XP bar to **evolve your weapon through six eras**:
+and every enemy you defeat gives XP. Pick up the XP gems they drop to **upgrade your weapon through 12 weapons in six eras**:
 
-Stone Age (sling) → Bronze Age (spear thrower) → Medieval (crossbow) → Gunpowder (cannon) → Modern (machine gun) → Future (laser)
+| Era | Weapon 1 | Weapon 2 |
+|---|---|---|
+| Stone Age | Thrown Rock | Sling |
+| Bronze Age | Javelin | Spear Thrower |
+| Medieval | Crossbow | Repeating Crossbow |
+| Gunpowder | Musket | Cannon |
+| Modern | Rifle | Machine Gun |
+| Future | Laser Pistol | Plasma Cannon |
 
 Each era changes the scenery, the enemies, the projectiles and the weapon's stats. Steer through green boost gates
 (+fire rate, +damage, +shots, +health) and avoid red ones; shooting a gate raises its value. At the end of the track
@@ -26,11 +33,23 @@ Health does not regenerate, so steering matters.
   shield at 66% and 33% health. Boss health scales with your damage, so a fight lasts about 15-30 s.
 - **Coins** drop from enemies, blocks and the boss and fly into the HUD counter. You keep all of them on a win and half on a loss.
 - **Upgrade shop** (from the title and end screens): Sharper Weapons (+10% damage per level), Quick Hands (+8% fire rate),
-  Tough Hide (+15 max health), Head Start (+10 starting XP), Lucky Coins (+15% coins). Costs rise with each level.
+  Tough Hide (+15 max health), Head Start (starting XP), Lucky Coins (+15% coins). Costs rise with each level.
 - **Saved progress** in localStorage (`eraRunner.save.v1`): coins, upgrade levels, best era, wins, music/SFX settings.
   Settings (gear icon) has Music and Sound FX toggles and Reset Progress, which asks you to confirm.
 - **Sound**: a sound per weapon, plus hits, kills, coins, gates, evolve, boss attacks, boss defeat, win and lose,
   and looping music (separate run and boss tracks). Audio starts on the first tap.
+
+## Stage 3
+- **12 weapons, two per era.** Each one has its own look, projectile, shot sound and stats. The second weapon
+  of an era is a modest step up (a small "UPGRADED!" banner); moving to a new era is a big jump
+  ("EVOLVED!" banner, new scenery, new enemies, and the boss you'll meet at the end).
+- **XP gems** drop where enemies and blocks die and lie on the track: steer within reach to collect them.
+  Missed gems are lost. Collecting gems in a row builds an XP streak bonus (up to x2) that missed gems knock down.
+- **Steeper XP curve** (`XP_STEPS` in `src/level.js`): 15, 25, 40, 70, 120, 190, 300, 460, 520, 400, 600 XP per step.
+  Where you finish now depends on how well you play; Head Start (60 / 140 / 250 / 400 / 600 / 850 starting XP by level) moves you along.
+  The weapon is locked in when the boss fight starts.
+- The HUD timeline shows 6 era icons with 2 pips each; the title screen shows all 12 weapons (unlocked ones lit).
+- Saves from Stage 2 load unchanged (same key; the data is migrated to version 2 in place).
 
 ## Credits and licenses
 All art and audio are original and generated in code. There are **no third-party asset files**.
@@ -50,7 +69,9 @@ node tests/tune.mjs     # balance check: plays the level with auto-pilot bots
 node tests/screens.mjs  # playtest screenshots -> screenshots/
 node tests/screens-feedback.mjs  # dense-section + gate-shooting screenshots
 node tests/screens-stage2.mjs    # title/shop/settings/boss/win screenshots
-N=50 BOTS=human UPG=all node tests/tune.mjs   # balance across upgrade levels
+N=50 BOTS=human UPG=all node tests/tune.mjs   # balance across upgrade levels (wins, weapon/boss reached)
+node tests/boss-check.mjs        # every boss with every weapon: win rate and fight length
+node tests/screens-stage3.mjs    # 12-weapon lineup, tier banner, new weapons, natural boss fights
 ```
 Pushing to `main` deploys to GitHub Pages via `.github/workflows/deploy.yml`.
 

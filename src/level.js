@@ -1,11 +1,21 @@
-import { ERAS, eraDps } from './eras.js';
+import { ERAS, tierDps, MAX_TIER } from './eras.js';
 
-// Deterministic level layout. The track is split into 6 sections, one per era; enemy HP in each
-// section is scaled to what that era's weapon can handle, and the XP needed to evolve out of an
-// era is a fraction of the HP available in its section, so a decent run evolves roughly on pace.
+// Deterministic level layout. The track is split into 6 sections. Enemy HP in each section is
+// scaled to a reference weapon tier for that point of the track (SECTION_TIER - roughly where a
+// decent, not perfect, player is), and the XP needed for each weapon step rises (XP_STEPS), so
+// where you end up depends on how many XP gems you collect.
 export const SECTION = 4600;
 export const START = 900;
-export const XP_FACTOR = 0.6;
+// reference weapon tier per section (fractional = between two weapons)
+export const SECTION_TIER = [0.6, 2.0, 3.4, 4.8, 6.0, 7.2];
+export const sectionRef = (k) => {
+  const t = SECTION_TIER[k], i = Math.floor(t), f = t - i;
+  return tierDps(i) * (1 - f) + tierDps(Math.min(MAX_TIER, i + 1)) * f;
+};
+// XP cost of each weapon step (tier t -> t+1), tuned against the bots for this layout's total
+// enemy HP (2281). Later steps cost noticeably more; XP comes from gems you pick up (x1-x2 streak).
+export const XP_STEPS = [15, 25, 40, 70, 120, 190, 300, 460, 520, 400, 600];
+const XP_REF_TOTAL = 2281;
 
 function rng(seed) {
   let a = seed >>> 0;
@@ -76,7 +86,7 @@ export function buildLevel(seed = 11) {
     const rows = PLAN[k];
     const totalW = rows.reduce((a, row) => a + ROW_WEIGHT[row], 0);
     let cursor = 0;
-    const h = eraDps(k) * HP_MULT[k];
+    const h = sectionRef(k) * HP_MULT[k];
     let gateIdx = 0;
     rows.forEach((row, i) => {
       const span = (SECTION * ROW_WEIGHT[row]) / totalW;
@@ -113,7 +123,8 @@ export function buildLevel(seed = 11) {
   }
   const finish = START + 6 * SECTION - 150;
   items.sort((a, b) => a.at - b.at);
-  const need = sectionHP.slice(0, 5).map((v) => Math.round(v * XP_FACTOR));
+  const total = sectionHP.reduce((a, v) => a + v, 0);
+  const need = XP_STEPS.slice(0, MAX_TIER).map((v) => Math.round((v * total) / XP_REF_TOTAL / 5) * 5);
   return { items, need, finish, sectionHP };
 }
 
