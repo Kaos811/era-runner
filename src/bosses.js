@@ -10,12 +10,12 @@ import { Sound } from './audio.js';
 //   beam    - a breath/laser strip down a lane
 // Every boss also raises a shield (immune to damage) at 2/3 and 1/3 health.
 export const BOSSES = [
-  { name: 'WOOLLY MAMMOTH', tex: 'boss_stone', hp: 1.15, proj: 'bp_rock', attacks: ['volley', 'charge', 'volley', 'volley2'], coins: 20 },
-  { name: 'CHARIOT CHAMPION', tex: 'boss_bronze', hp: 1.05, proj: 'bp_spear', attacks: ['charge', 'volley2', 'volley', 'charge'], coins: 30 },
-  { name: 'CASTLE DRAGON', tex: 'boss_medieval', hp: 0.85, proj: 'bp_fire', attacks: ['beam', 'volley', 'barrage', 'volley2'], beam: 0xff7a1f, coins: 40 },
-  { name: 'PIRATE GALLEON', tex: 'boss_gunpowder', hp: 1.12, proj: 'bp_ball', attacks: ['volley2', 'barrage', 'volley', 'volley2'], coins: 55 },
-  { name: 'IRON TANK', tex: 'boss_modern', hp: 1.05, proj: 'bp_shell', attacks: ['barrage', 'charge', 'volley2', 'volley'], coins: 70 },
-  { name: 'MEGA ROBOT', tex: 'boss_future', hp: 1.35, proj: 'bp_plasma', attacks: ['beam', 'barrage', 'volley2', 'charge'], beam: 0x29f0ff, coins: 90 },
+  { name: 'WOOLLY MAMMOTH', tex: 'boss_stone', hp: 1.42, proj: 'bp_rock', attacks: ['volley', 'charge', 'volley', 'volley2'], coins: 20 },
+  { name: 'CHARIOT CHAMPION', tex: 'boss_bronze', hp: 1.2, proj: 'bp_spear', attacks: ['charge', 'volley2', 'volley', 'charge'], coins: 30 },
+  { name: 'CASTLE DRAGON', tex: 'boss_medieval', hp: 0.74, proj: 'bp_fire', attacks: ['beam', 'volley', 'barrage', 'volley2'], beam: 0xff7a1f, coins: 40 },
+  { name: 'PIRATE GALLEON', tex: 'boss_gunpowder', hp: 1.45, proj: 'bp_ball', attacks: ['volley2', 'barrage', 'volley', 'volley2'], coins: 55 },
+  { name: 'IRON TANK', tex: 'boss_modern', hp: 1.15, proj: 'bp_shell', attacks: ['barrage', 'charge', 'volley2', 'volley'], coins: 70 },
+  { name: 'MEGA ROBOT', tex: 'boss_future', hp: 1.6, proj: 'bp_plasma', attacks: ['beam', 'barrage', 'volley2', 'charge'], beam: 0x29f0ff, coins: 90 },
 ];
 
 export const LANES = [-150, 0, 150];
@@ -25,7 +25,7 @@ export const BOSS_HOME_Z = 450;
 // (better gates, upgrades) still finishes the fight faster, a weak one isn't stuck forever.
 export const BOSS_SECONDS = 13;
 // a typical player arrives with ~37x their weapon's base DPS (gates + extra shots)
-const REF_BOOST = 37;
+const REF_BOOST = 26;
 const DMG = { proj: 28, charge: 38, beam: 33 }; // x level damage multiplier (loops)
 const laneOf = (x) => LANES.reduce((a, b) => (Math.abs(b - x) < Math.abs(a - x) ? b : a));
 
@@ -50,7 +50,7 @@ export const BossMethods = {
     c.add([sh, img, shield]);
     // power-ups add damage on top of the base volley; count them in roughly
     const P = this.pu;
-    const puBoost = (1 + P.double) * (1 + 0.25 * P.explode + 0.2 * P.chain) + (P.drone * 2.6 * 1.6) / Math.max(1, this.rate * this.shots) + (P.blades ? 0.3 : 0);
+    const puBoost = (1 + P.double) * (1 + P.twin) * (1 + 0.25 * P.explode + 0.2 * P.chain) + (P.blades ? 0.3 : 0);
     const hp = Math.round(bossHpFor(this.tier, this.rate * this.dmg * this.shots * puBoost) * this.info.bossMul * (def.hp || 1));
     const obj = { type: 'boss', c, img, shield, x: 0, z: 1750, halfW: 170, hittable: true, size: 2, eraLook: era };
     this.objs.push(obj);
@@ -189,6 +189,7 @@ export const BossMethods = {
     const dealt = Math.min(p.dmg, b.hp);
     b.hp -= dealt;
     this.stats.damage += dealt;
+    this.addPop(b.obj, dealt);
     b.obj.flash = 0.05;
     if (!this.simulating && !p.noFx) Sound.play('hit');
     const frac = b.hp / b.maxHp;

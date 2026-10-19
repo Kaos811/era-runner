@@ -526,6 +526,24 @@ function powerupArt(scene) {
   make(scene, 'bubble', 200, 200, (p) => { p.fill(0x7fe8ff, 0.25).circle(100, 100, 98); p.line(6, 0xbff6ff, 0.9).scircle(100, 100, 94); p.fill(0xffffff, 0.5).ellipse(66, 56, 40, 20); });
 }
 
+// gem crates (one look per era), weapon add-ons for power-ups, Twin Weapon icon
+function crateArt(scene) {
+  const W = 130, H = 112;
+  const gem = (p, cx, cy, r) => { p.fill(0x29d8ff).poly([[cx, cy - r], [cx + r * 0.8, cy - r * 0.2], [cx, cy + r], [cx - r * 0.8, cy - r * 0.2]]); p.fill(0xbff6ff).poly([[cx, cy - r], [cx + r * 0.35, cy - r * 0.2], [cx, cy + r * 0.2], [cx - r * 0.35, cy - r * 0.2]]); };
+  const C = (key, draw) => make(scene, 'crate_' + key, W, H, (p) => { draw(p); gem(p, W / 2, H / 2 + 4, 20); });
+  C('stone', (p) => { p.fill(0x6f6a62).rrect(4, 12, 122, 98, 18); p.fill(0x8d877c).rrect(10, 16, 110, 40, 14); p.fill(0x5a8a3a).ellipse(30, 16, 40, 14).ellipse(96, 104, 30, 10); p.fill(0x4e4a44).rect(18, 70, 20, 6).rect(90, 40, 22, 6); });
+  C('bronze', (p) => { p.fill(0x8a5a22).rrect(4, 20, 122, 90, 10); p.fill(0xc98b36).rrect(0, 8, 130, 26, { tl: 14, tr: 14, bl: 4, br: 4 }); p.fill(0xe0b04a).rect(8, 30, 114, 6).rect(8, 96, 114, 6); [16, 114].forEach((x) => p.fill(0xe0b04a).circle(x, 64, 7)); });
+  C('medieval', (p) => { p.fill(0x7a4a24).rrect(4, 18, 122, 92, 8); p.fill(0x9c6232).rrect(0, 6, 130, 28, { tl: 16, tr: 16, bl: 2, br: 2 }); p.fill(0x3c3f46).rect(20, 6, 12, 104).rect(98, 6, 12, 104); p.fill(0xd0a33c).rrect(56, 26, 18, 16, 4); });
+  C('gunpowder', (p) => { p.fill(0x6b4423).rrect(10, 8, 110, 102, 30); p.fill(0x8a5a2e).rrect(18, 12, 94, 94, 26); p.fill(0x3a3d43).rect(10, 24, 110, 8).rect(10, 86, 110, 8); p.fill(0x222222).rect(8, 0, 6, 14); });
+  C('modern', (p) => { p.fill(0x4f5d3a).rrect(2, 16, 126, 94, 6); p.fill(0x6b7a4c).rect(6, 20, 118, 18); p.fill(0x2e3424).rect(2, 50, 126, 6); p.fill(0xe8d34a).rect(10, 94, 24, 8).rect(96, 94, 24, 8); p.fill(0x222222).rect(50, 8, 30, 10); });
+  C('future', (p) => { p.fill(0x29f0ff, 0.25).rrect(0, 4, 130, 108, 22); p.fill(0x1b1f3a).rrect(8, 10, 114, 96, 18); p.line(4, 0x29f0ff).srrect(8, 10, 114, 96, 18); p.fill(0xff4fd8).rect(20, 18, 24, 4).rect(86, 94, 24, 4); });
+  make(scene, 'mod_barrel', 18, 64, (p) => { p.fill(0x3a3d43).rrect(2, 0, 14, 62, 6); p.fill(0x9aa3ad).rrect(5, 2, 5, 56, 3); p.fill(0xffc21a).rect(0, 0, 18, 7); p.fill(0x222222).ellipse(9, 3, 10, 5); });
+  make(scene, 'mod_tip', 60, 80, (p) => { p.fill(0x7fe8ff, 0.25).ellipse(30, 40, 58, 78); p.fill(0x7fe8ff, 0.5).ellipse(30, 44, 30, 50); p.fill(0xffffff).poly([[30, 4], [40, 50], [30, 62], [20, 50]]); });
+  make(scene, 'mod_ember', 120, 120, (p) => { for (let i = 0; i < 10; i++) { const a = (i * Math.PI) / 5; p.fill(i % 2 ? 0xffc21a : 0xff6a1f, 0.85).circle(60 + Math.cos(a) * 44, 60 + Math.sin(a) * 44, 8); } p.fill(0xff7a1f, 0.18).circle(60, 60, 58); });
+  make(scene, 'mod_ring', 90, 90, (p) => { p.line(6, 0xffc21a, 0.9).scircle(45, 45, 38); p.line(3, 0xfff1a8, 0.9).scircle(45, 45, 28); for (let i = 0; i < 6; i++) { const a = (i * Math.PI) / 3; p.fill(0xffe14d).circle(45 + Math.cos(a) * 38, 45 + Math.sin(a) * 38, 5); } });
+  make(scene, 'pu_twin', 48, 48, (p) => { [12, 34].forEach((x) => { p.fill(0xffc21a).rrect(x - 5, 8, 10, 32, 4); p.fill(0xfff1a8).rect(x - 2, 10, 3, 18); p.fill(0x8b5a2b).rrect(x - 7, 34, 14, 10, 3); }); p.fill(0xffffff).rect(21, 20, 6, 3).rect(22.5, 18.5, 3, 6); });
+}
+
 function icons(scene) {
   make(scene, 'coin', 24, 24, (p) => { p.fill(0xb8860b).circle(12, 12, 12); p.fill(0xffd84d).circle(12, 12, 10); p.fill(0xf0b429).circle(12, 12, 7); p.fill(0xfff1a8).rrect(10, 6, 4, 12, 2); });
   make(scene, 'icon_dmg', 48, 48, (p) => { p.fill(0xd9dee3).poly([[24, 2], [32, 10], [16, 40], [8, 32]]); p.fill(0x8b5a2b).rrect(4, 34, 14, 10, 3); p.fill(0xf0b429).poly([[6, 26], [22, 42], [18, 46], [2, 30]]); p.fill(0xff5a4f).circle(38, 10, 7); });
@@ -543,6 +561,7 @@ export class BootScene extends Phaser.Scene {
     WEAPONS.forEach((w) => weapon(this, w.key));
     projectiles(this);
     powerupArt(this);
+    crateArt(this);
     misc(this);
     bosses(this);
     icons(this);

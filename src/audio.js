@@ -60,6 +60,12 @@ const SFX = {
   shot_musket: [0.1, () => { noise({ type: 'bandpass', f: 1600, f2: 300, t: 0.2, vol: 0.32, q: 0.6 }); tone({ type: 'square', f: 220, f2: 60, t: 0.08, vol: 0.08 }); }],
   shot_rifle: [0.07, () => { noise({ type: 'bandpass', f: 3000, f2: 700, t: 0.09, vol: 0.26, q: 0.8 }); tone({ type: 'square', f: 260, f2: 90, t: 0.05, vol: 0.06 }); }],
   shot_plasma: [0.09, () => { tone({ type: 'sawtooth', f: 400, f2: 1400, t: 0.08, vol: 0.06 }); tone({ type: 'sine', f: 220, f2: 70, t: 0.22, vol: 0.18, delay: 0.03 }); noise({ type: 'bandpass', f: 2500, f2: 600, t: 0.15, vol: 0.06 }); }],
+  crateHit: [0.05, (f = 0) => { noise({ type: 'bandpass', f: 1800 + 1600 * f, f2: 900, t: 0.05, vol: 0.12, q: 4 }); tone({ type: 'square', f: 520 + 700 * f, t: 0.04, vol: 0.04 }); }],
+  crateBurst: [0.2, () => { noise({ f: 2600, f2: 200, t: 0.4, vol: 0.35 }); tone({ type: 'sine', f: 180, f2: 60, t: 0.3, vol: 0.25 }); arp([784, 988, 1175, 1568], 0.03, { type: 'triangle', t: 0.12, vol: 0.08 }); }],
+  gemTrail: [0.035, (n = 0) => { const m = 72 + Math.min(24, n * 0.7); tone({ type: 'triangle', f: midi(m), t: 0.08, vol: 0.12 }); tone({ type: 'sine', f: midi(m + 12), t: 0.05, vol: 0.05 }); }],
+  bandup: [0.15, (b = 1) => { const base = [67, 69, 72, 74, 76, 79][b] || 72; arp([midi(base), midi(base + 4), midi(base + 7), midi(base + 12)], 0.04, { type: 'square', t: 0.12, vol: 0.08 }); noise({ type: 'highpass', f: 5000, t: 0.18, vol: 0.06 }); }],
+  carddrop: [0.2, () => { noise({ type: 'bandpass', f: 600, f2: 2400, t: 0.22, vol: 0.18, q: 1.5 }); tone({ type: 'sine', f: 140, f2: 70, t: 0.18, vol: 0.2, delay: 0.2 }); }],
+  cardflip: [0.1, () => { noise({ type: 'bandpass', f: 3000, f2: 1200, t: 0.08, vol: 0.16, q: 2 }); tone({ type: 'triangle', f: 660, f2: 990, t: 0.07, vol: 0.06 }); }],
   checkpoint: [0.3, () => { noise({ type: 'bandpass', f: 400, f2: 3000, t: 0.45, vol: 0.25, attack: 0.05 }); [523, 784, 1047].forEach((f, i) => tone({ type: 'square', f, t: 0.1, vol: 0.06, delay: 0.25 + i * 0.05 })); }],
   rarity0: [0.2, () => { tone({ type: 'square', f: 660, t: 0.12, vol: 0.08 }); tone({ type: 'square', f: 880, t: 0.16, vol: 0.08, delay: 0.08 }); }],
   rarity1: [0.2, () => arp([523, 659, 784], 0.06, { type: 'square', t: 0.14, vol: 0.08 })],
@@ -150,14 +156,14 @@ export const Sound = {
     }
     if (ctx.state === 'suspended') ctx.resume();
   },
-  play(name) {
+  play(name, arg) {
     if (!ctx || ctx.state !== 'running' || !prefs.sfx) return;
     const def = SFX[name];
     if (!def) return;
     const t = now();
     if (last[name] && t - last[name] < def[0]) return;
     last[name] = t;
-    def[1]();
+    def[1](arg);
   },
   setSong(name) { if (SONGS[name] && music.song !== name) { music.song = name; music.step = 0; } },
   setMusic(on) { prefs.music = on; if (musBus) musBus.gain.setTargetAtTime(on ? 0.2 : 0, now(), 0.05); },

@@ -143,18 +143,18 @@ try {
   check('Level 7 loops back to the Stone Age with tougher enemies', tiers.l7[0] === 0 && tiers.l7[1] === 'Thrown Rock' && tiers.l7[2] > 1.5 && tiers.l7[3] > 1, `HP x${tiers.l7[2].toFixed(2)}, dmg x${tiers.l7[3]}`);
 
   // checkpoint: gems fill the meter, passing the gate cashes it out for power-ups
-  const lap = await page.evaluate(() => [__ER.payout(2), __ER.payout(12), __ER.payout(__ER.LAP + 12), __ER.payout(__ER.LAP * 2)]);
+  const lap = await page.evaluate(() => [__ER.payout(2), __ER.payout(16), __ER.payout(__ER.LAP + 16), __ER.payout(__ER.LAP * 2)]);
   check('meter payout: bands by points, each full lap banks a Legendary', lap[0].join() === '0' && lap[1].join() === '2' && lap[2].join() === '4,2' && lap[3].join() === '4,4', JSON.stringify(lap));
   const cp = await page.evaluate(async () => {
     const s = __ER.scene; s.closeScreen(); s.mode = 'won'; s.startRun(1); __ER.setBot(null); s.hp = s.maxHp = 9999;
-    __ER.toCheckpoint(0, 12);
+    __ER.toCheckpoint(0, 16);
     const before = { meter: s.meter, band: s.meterBand(), dmg: s.dmg, rate: s.rate };
     let t = 0; while (!s.stats.checkpoints.length && t < 6) { s.step(1 / 60); t += 1 / 60; }
     const c = s.stats.checkpoints[0];
     return { before, c, meter: s.meter, n: Object.values(s.puCount).reduce((a, v) => a + v, 0), paused: s.pauseT > 0, ids: c?.ids };
   });
-  check('passing the CHECKPOINT cashes out the meter', !!cp.c && cp.meter === 0 && cp.c.bands.join() === '2', JSON.stringify(cp.c));
-  check('checkpoint pays a power-up of the band reached (Rare) with a reveal', cp.n === 1 && cp.paused && ['pierce', 'shield', 'big'].includes(cp.ids?.[0]), `${cp.ids} paused=${cp.paused}`);
+  check('passing under the METER ARCH cashes out the meter', !!cp.c && cp.meter === 0 && cp.c.bands.join() === '2', JSON.stringify(cp.c));
+  check('checkpoint pays a power-up of the band reached (Rare) with a reveal', cp.n === 1 && cp.paused && ['pierce', 'shield', 'big', 'extra'].includes(cp.ids?.[0]), `${cp.ids} paused=${cp.paused}`);
   for (let i = 0; i < 40 && (await state()).paused; i++) await sleep(250);
   check('reveal finishes and the run continues', (await state()).paused === false && (await state()).mode === 'play');
   const pu = await page.evaluate(() => {
@@ -167,14 +167,14 @@ try {
     let t = 0; while (t < 1.5) { s.step(1 / 60); t += 1 / 60; }
     return { d0, d1: s.dmg, sh0, sh1: s.shots, blades: s.pu.blades, icons: s.puIcons?.list?.length || 0, dmgTaken: 1e6 - e.hp };
   });
-  check('power-ups apply: +10% damage, +1 shot, orbit blades', Math.abs(pu.d1 / pu.d0 - 1.1) < 0.01 && pu.sh1 === pu.sh0 + 1 && pu.blades === 2, `dmg ${pu.d0.toFixed(1)}->${pu.d1.toFixed(1)} shots ${pu.sh0}->${pu.sh1}`);
+  check('power-ups apply: +6% damage, +1 barrel, orbit blades', Math.abs(pu.d1 / pu.d0 - 1.06) < 0.01 && pu.sh1 === pu.sh0 + 1 && pu.blades === 2, `dmg ${pu.d0.toFixed(1)}->${pu.d1.toFixed(1)} shots ${pu.sh0}->${pu.sh1}`);
   check('active power-ups show HUD icons', pu.icons >= 3, `${pu.icons} icon parts`);
 
   // XP comes from gems: kill an enemy in your lane; its gem pops to the side, steer onto it
   const gemRun = (steer) => page.evaluate((steer) => {
     const s = __ER.scene; s.closeScreen(); s.mode = 'won'; s.startRun(1); __ER.setBot(null);
     s.objs.forEach((o) => { o.dead = true; }); s.qi = s.level.items.length;
-    s.spawn({ type: 'enemy', at: s.d + 900, x: 0, hp: 1, size: 1, dmg: 12, section: 0 });
+    s.spawn({ type: 'enemy', at: s.d + 900, x: 0, hp: 1, size: 1.4, dmg: 12, section: 0 });
     s.tx = s.px = 0;
     const xp0 = s.xp; let t = 0; let popped = null;
     while (t < 5 && s.stats.gems === 0 && !(s.stats.gemsMissed > 0)) {
@@ -188,7 +188,40 @@ try {
   check('standing still: the gem pops out of reach and is missed', still.gems === 0 && Math.abs(still.popped) >= 40, `popped to x=${still.popped?.toFixed(0)}`);
   const gem = await gemRun(true);
   check('steering onto the gem picks it up: XP + checkpoint meter', gem.gems > 0 && gem.xp > gem.xp0 && gem.meter > 0, `xp ${gem.xp0} -> ${gem.xp.toFixed(1)} after ${gem.t.toFixed(1)}s`);
-  check('3 checkpoints per level (~30%, ~60%, before the boss)', await page.evaluate(() => { const L = __ER.scene.level; const f = L.checkpoints.map((c) => (c - 700) / (L.finish - 700)); return f.length === 3 && f[0] > 0.25 && f[0] < 0.35 && f[1] > 0.55 && f[1] < 0.66 && f[2] > 0.95; }));
+  const lay = await page.evaluate(() => { const L = __ER.scene.level; return { arches: L.checkpoints.length, crates: L.crates.length, gates: L.items.filter((i) => i.type === 'gate').length, last: (L.finish - L.checkpoints[L.checkpoints.length - 1]), gaps: L.checkpoints.map((c, i) => (i ? c - L.checkpoints[i - 1] : c - 700) / 330) }; });
+  check('a level has 5 gem crates, 5 meter arches (last one right before the boss) and 3 gates', lay.arches === 5 && lay.crates === 5 && lay.gates === 3 && lay.last < 600 && lay.gaps.every((g) => g > 11 && g < 15), JSON.stringify(lay));
+  // gem crate: shooting raises its number, reaching it bursts it into a weaving trail of that many gems
+  const crate = await page.evaluate(() => {
+    const s = __ER.scene; s.closeScreen(); s.mode = 'won'; s.startRun(1); __ER.setBot(null); s.hp = s.maxHp = 9999;
+    s.objs.forEach((o) => { o.dead = true; }); s.qi = s.level.items.length;
+    s.spawn({ type: 'crate', at: s.d + 1500, x: 0, ref: 4, idx: 0, phase: 1 });
+    const c = s.objs[s.objs.length - 1]; const v0 = c.value;
+    s.tx = s.px = 0; let t = 0;
+    while (!c.used && t < 8) { s.step(1 / 60); t += 1 / 60; }
+    const trail = s.gems.filter((g) => g.trail);
+    const xs = trail.map((g) => g.x);
+    const out = { v0, v: Math.floor(c.value), burst: c.used, n: trail.length, spread: Math.max(...xs) - Math.min(...xs), m0: s.meter };
+    // steer through the trail like a player would
+    t = 0; while (s.gems.some((g) => g.trail) && t < 10) { const g = s.gems.filter((q) => q.trail && q.z > 0).sort((a, b) => a.z - b.z)[0]; if (g) s.tx = g.x; s.step(1 / 60); t += 1 / 60; }
+    out.caught = s.stats.trailGems; out.meter = s.meter; out.pops = s.popPool.length;
+    return out;
+  });
+  check('shooting a gem crate raises its number', crate.v > crate.v0 + 5, `${crate.v0} -> ${crate.v}`);
+  check('reaching the crate bursts it into a trail of that many gems that weaves across lanes', crate.burst && crate.n === crate.v && crate.spread > 200, `${crate.n} gems, spread ${crate.spread.toFixed(0)}`);
+  check('steering through the trail fills the arch meter', crate.caught > crate.n * 0.7 && crate.meter > crate.n * 0.7, `caught ${crate.caught}/${crate.n}, meter ${crate.meter.toFixed(1)}`);
+  check('hits pop damage / +N numbers', crate.pops > 0, `${crate.pops} number texts`);
+  // Twin Weapon: a second copy of the weapon appears and fires the same volley
+  const twin = await page.evaluate(() => {
+    const s = __ER.scene; s.closeScreen(); s.mode = 'won'; s.startRun(1); __ER.setBot(null);
+    s.projs = []; s.fire(); const one = s.projs.length;
+    __ER.givePowerup('twin'); s.projs.forEach((p) => p.img?.destroy()); s.projs = []; s.fire(); const two = s.projs.length;
+    const img = s.twinImgs?.[0]?.list?.find((o) => o.texture && o.texture.key.startsWith('weapon_'))?.texture.key; const main0 = s.weaponImg.texture.key;
+    s.gainXp(9999); s.render();
+    const img2 = s.twinImgs?.[0]?.list?.find((o) => o.texture && o.texture.key.startsWith('weapon_'))?.texture.key;
+    return { one, two, img, img2, main0, main1: s.weaponImg.texture.key };
+  });
+  check('Twin Weapon: a copy of your weapon appears and fires alongside', twin.two === twin.one * 2 && twin.img2 != null, JSON.stringify(twin));
+  check('Twin Weapon updates when the weapon upgrades', twin.img === twin.main0 && twin.img2 === twin.main1 && twin.img2 !== twin.img, JSON.stringify(twin));
   await page.evaluate(() => __ER.setTestUpgrades(null, false));
 
   // lose: low health, no steering -> lose screen, half the coins kept
@@ -198,6 +231,7 @@ try {
   // shooting a red gate turns it green before you reach it
   const gate = await page.evaluate(() => {
     const s = __ER.scene; s.closeScreen(); s.mode = 'won'; __ER.setTestUpgrades({}, true); s.startRun(1); __ER.setBot(null);
+    s.objs.forEach((o) => { o.dead = true; }); s.qi = s.level.items.length;
     s.spawn({ type: 'gate', at: s.d + 1500, gates: [{ kind: 'rate', value: -20 }, { kind: 'dmg', value: -20 }], section: 0 });
     const g = s.objs.filter((o) => o.type === 'gate').slice(-2)[0];
     s.tx = s.px = g.x; const v0 = g.gate.value;

@@ -24,16 +24,73 @@ export const CheckpointMethods = {
     this.refreshPuIcons?.();
   },
 
-  addMeter(pts) { this.meter += pts; },
+  addMeter(pts) {
+    const b0 = this.meterBand(), l0 = this.meterLap();
+    this.meter += pts;
+    const b1 = this.meterBand(), l1 = this.meterLap();
+    if (b1 === b0 && l1 === l0) return;
+    // band-up: flash the arch meter and the HUD meter in the new colour
+    this.meterFlash = 1;
+    if (this.simulating) return;
+    Sound.play('bandup', l1 > l0 ? 5 : b1);
+    const R = RARITIES[b1];
+    const pt = this.archMeterPoint();
+    if (this.bandText?.active) this.bandText.destroy();
+    const t = this.bandText = this.add.text(pt.x, pt.y - 34, l1 > l0 ? `LOOP x${l1 + 1}!` : `${R.name}!`, style(l1 > l0 ? 30 : 24, l1 > l0 ? '#ffd84d' : R.text, 6)).setOrigin(0.5).setDepth(8450);
+    this.tweens.add({ targets: t, y: t.y - 40, alpha: { from: 1, to: 0 }, scale: { from: 1.3, to: 1 }, duration: 700, onComplete: () => t.destroy() });
+  },
+
+  // the next arch still ahead (its meter fills as you collect)
+  nextArch() { return this.objs.find((o) => o.type === 'checkpoint' && !o.used && !o.dead); },
+
+  // where collected gems fly to: the meter on the next arch if it's in view, else the HUD meter
+  archMeterPoint() {
+    const o = this.nextArch();
+    if (o && o.z < 1700 && o.z > 0) {
+      const pr = this.projectPt(0, o.z);
+      const inLap = this.meter - this.meterLap() * LAP;
+      return { x: pr.x + (-220 + 440 * Math.min(1, inLap / LAP)) * pr.s, y: pr.y - 312 * pr.s, s: Math.max(0.2, 0.7 * pr.s) };
+    }
+    const inLap = this.meter - this.meterLap() * LAP;
+    return { x: 20 + 500 * Math.min(1, inLap / LAP), y: 162 + (this.hudY || 0), s: 0.35 };
+  },
   meterLap() { return Math.floor(this.meter / LAP); },
   meterBand() { return bandOf(this.meter - this.meterLap() * LAP); },
 
+  // meter arch: the meter is drawn on the arch's banner and fills as you collect gems
   spawnCheckpoint(it, z) {
     const c = this.add.container(0, 0);
     const arch = this.add.image(0, 0, 'checkpoint').setOrigin(0.5, 1).setScale(0.5);
-    const t = this.add.text(0, -338, 'CHECKPOINT', style(46, '#ffffff', 8)).setOrigin(0.5);
-    c.add([arch, t]);
-    this.objs.push({ type: 'checkpoint', c, img: arch, label: t, x: 0, z, halfW: 0, hittable: false, size: 1, idx: it.idx });
+    const mg = this.add.graphics();
+    const t = this.add.text(0, -350, 'POWER-UP', style(34, '#ffffff', 7)).setOrigin(0.5);
+    c.add([arch, mg, t]);
+    this.objs.push({ type: 'checkpoint', c, img: arch, mg, label: t, x: 0, z, halfW: 0, hittable: false, size: 1, idx: it.idx });
+  },
+
+  renderArchMeter(o) {
+    if (this.simulating) return;
+    const next = this.nextArch() === o;
+    const key = next ? `${Math.floor(this.meter * 4)}|${Math.round((this.meterFlash || 0) * 10)}` : 'idle';
+    if (o.mKey === key) return;
+    o.mKey = key;
+    const g = o.mg;
+    g.clear();
+    const x0 = -220, w = 440, y = -322, h = 22;
+    const lap = next ? this.meterLap() : 0;
+    const inLap = next ? this.meter - lap * LAP : 0;
+    g.fillStyle(0x0b0d14, 1).fillRoundedRect(x0 - 4, y - 4, w + 8, h + 8, 10);
+    RARITIES.forEach((R, i) => {
+      const a = x0 + (bandStart(i) / LAP) * w, bw = (R.size / LAP) * w;
+      g.fillStyle(R.color, 0.25).fillRect(a, y, bw, h);
+      const f = Phaser.Math.Clamp((inLap - bandStart(i)) / R.size, 0, 1);
+      if (f > 0) g.fillStyle(R.color, 1).fillRect(a, y, bw * f, h);
+      if (i) g.fillStyle(0x000000, 0.9).fillRect(a - 1.5, y, 3, h);
+    });
+    const band = next ? this.meterBand() : 0;
+    const R = RARITIES[band];
+    if (this.meterFlash > 0 && next) g.fillStyle(R.color, 0.5 * this.meterFlash).fillRoundedRect(-252, -374, 504, 80, 18);
+    const into = Math.floor(inLap - bandStart(band));
+    o.label.setText(next ? `${R.name} ${into}/${R.size}${lap ? `  x${lap + 1}` : ''}` : 'POWER-UP').setColor(next ? R.text : '#ffffff');
   },
 
   // ---- cash out: one reward per completed lap (Legendary) + the band of the partial lap
@@ -53,13 +110,13 @@ export const CheckpointMethods = {
     u.apply(this.pu, this);
     if (!this.puCount[u.id]) this.puOrder.push(u.id);
     this.puCount[u.id] = (this.puCount[u.id] || 0) + 1;
-    if (!this.simulating) this.refreshPuIcons();
+    if (!this.simulating) { this.refreshPuIcons(); this.refreshWeaponLook?.(!!u.look); }
   },
 
   // ---- the reveal: gems fly into the gate, then one card per reward flips over
   revealRewards(picks, bands, pts) {
     const n = picks.length;
-    const per = 1.35;
+    const per = 1.5;
     const T = 0.55 + n * per + 0.45;
     const run = this.runId;
     this.pauseT = 999; // held until the reveal's last tween finishes (same clock as the cards)
@@ -90,10 +147,11 @@ export const CheckpointMethods = {
         cleanup.push(card);
         const back = card.getByName('back'), face = card.getByName('face');
         face.setVisible(false);
-        card.setScale(0.2, 0.2);
-        this.tweens.add({ targets: card, scaleX: 1, scaleY: 1, duration: 160, ease: 'Back.easeOut' });
+        card.y = -260;
+        Sound.play('carddrop');
+        this.tweens.add({ targets: card, y: 470, duration: 260, ease: 'Back.easeOut' });
         // flip: squash to 0 width, swap to the face, expand
-        this.tweens.add({ targets: card, scaleX: 0, duration: 150, delay: 260, ease: 'Sine.easeIn', onComplete: () => {
+        this.tweens.add({ targets: card, scaleX: 0, duration: 150, delay: 420, ease: 'Sine.easeIn', onStart: () => Sound.play('cardflip'), onComplete: () => {
           if (!card.active) return;
           back.setVisible(false); face.setVisible(true);
           this.revealFace = i;
@@ -219,6 +277,7 @@ export const CheckpointMethods = {
     o.flash = 0.05;
     this.stats.damage += dealt;
     this.stats.puDamage = (this.stats.puDamage || 0) + dealt;
+    this.addPop(o, dealt);
     if (o.hp <= 0.0001) this.kill(o, true);
     else o.hpText?.setText(String(Math.ceil(o.hp)));
   },
@@ -334,7 +393,9 @@ export const CheckpointMethods = {
     g.fillStyle(0xffffff, 0.22).fillRect(x0, y + 2, (inLap / LAP) * w, 5);
     const band = this.meterBand();
     const R = RARITIES[band];
-    const label = `${R.name}${lap ? `   x${lap + 1}` : ''}`;
+    const label = `${R.name} ${Math.floor(inLap - bandStart(band))}/${R.size}${lap ? `   x${lap + 1}` : ''}`;
+    this.meterFlash = Math.max(0, (this.meterFlash || 0) - 0.04);
+    if (this.meterFlash > 0) g.fillStyle(R.color, 0.45 * this.meterFlash).fillRoundedRect(x0 - 4, y - 4, w + 8, h + 8, 10);
     if (this.meterText.text !== label) { this.meterText.setText(label); this.meterText.setColor(R.text); }
   },
 

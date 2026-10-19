@@ -29,10 +29,10 @@ for (const bot of bots) {
       for (let i = 0; i < CAP && S.data.level <= MAXLV; i++) {
         const L = S.data.level;
         const upgN = keys.reduce((a, k) => a + S.data.upg[k], 0);
-        s.closeScreen(); s.mode = 'won'; s.startRun(L); E.setBot(bot); s.tx = 0;
+        s.closeScreen(); s.mode = 'won'; s.startRun(L); E.setBot(bot === 'null' ? null : bot); s.tx = 0;
         const st = E.sim(260);
         out.push({ L, won: st.mode === 'won', upgN, coins: st.stats.coins, bank: S.data.coins, t: st.time, bossT: st.boss ? st.boss.t : 0, reachedBoss: !!st.boss, tier: st.tier, era: st.era,
-          cps: st.stats.checkpoints.map((k) => ({ pts: k.pts, band: k.bands[k.bands.length - 1], laps: k.laps })) });
+          cps: st.stats.checkpoints.map((k) => ({ pts: k.pts, band: k.bands[k.bands.length - 1], laps: k.laps })), crates: st.stats.crates, trail: [st.stats.trailGems, st.stats.trailMissed] });
         // spend: cheapest affordable first
         for (;;) {
           const opts = keys.map((k) => { const u = E.upgrades.find((x) => x.key === k); return { u, lvl: S.data.upg[k], cost: E.upgCost(u, S.data.upg[k]) }; }).filter((o) => o.lvl < o.u.max && o.cost <= S.data.coins).sort((a, b) => a.cost - b.cost);
@@ -53,11 +53,12 @@ for (const bot of bots) {
       `run ${med(w.map((r) => Math.round(r.t)))}s (boss ${med(w.map((r) => Math.round(r.bossT)))}s)  weapon2 ${Math.round((100 * a.filter((r) => r.tier % 2 === 1).length) / a.length)}%  lost@boss ${a.filter((r) => !r.won && r.reachedBoss).length}`);
   }
   const cps = runs.flatMap((r) => r.cps.map((k, i) => ({ ...k, i })));
-  for (const i of [0, 1, 2]) {
+  for (const i of [0, 1, 2, 3, 4]) {
     const k = cps.filter((x) => x.i === i);
     const dist = BANDS.map((b, j) => `${b} ${Math.round((100 * k.filter((x) => !x.laps && x.band === j).length) / k.length)}%`).join(' ');
     console.log(`  checkpoint ${i + 1}: n=${k.length} pts median ${med(k.map((x) => Math.round(x.pts)))}  no-loop band: ${dist}  LOOPED ${Math.round((100 * k.filter((x) => x.laps).length) / k.length)}% (x2+: ${k.filter((x) => x.laps >= 1 && x.pts >= 0).length}, x3+: ${k.filter((x) => x.laps >= 2).length})`);
   }
+  console.log(`  crate number median ${med(runs.flatMap((r) => r.crates))}  trail gems caught ${Math.round(100 * runs.reduce((a, r) => a + r.trail[0], 0) / Math.max(1, runs.reduce((a, r) => a + r.trail[0] + r.trail[1], 0)))}%`);
   const lv = Math.max(...runs.map((r) => r.L));
   console.log(`  total runs ${runs.length}, furthest level ${lv}`);
 }
@@ -67,11 +68,11 @@ for (const bot of ['smart', 'casual', 'human', 'null']) {
   const r = await page.evaluate((bot) => {
     const E = window.__ER; const s = E.scene; E.save.reset(); s.noSave = true; s.testUpg = { dmg: 0, rate: 0, hp: 0, xp: 0, coin: 0 };
     const out = [];
-    for (let i = 0; i < 40; i++) { s.closeScreen(); s.mode = 'won'; s.startRun(1); E.setBot(bot === 'null' ? null : bot); s.tx = 0; const st = E.sim(260); out.push({ won: st.mode === 'won', cps: st.stats.checkpoints.map((k) => k.bands[k.bands.length - 1] + (k.laps ? 'L' : '')), tier: st.tier }); }
+    for (let i = 0; i < 40; i++) { s.closeScreen(); s.mode = 'won'; s.startRun(1); E.setBot(bot === 'null' ? null : bot); s.tx = 0; const st = E.sim(260); out.push({ won: st.mode === 'won', cps: st.stats.checkpoints.map((k) => k.bands[k.bands.length - 1] + (k.laps ? 'L' : '')), tier: st.tier, crates: st.stats.crates }); }
     s.testUpg = null; return out;
   }, bot);
   const cps = r.flatMap((x) => x.cps);
-  console.log(`  ${bot.padEnd(7)} win ${r.filter((x) => x.won).length}/40  weapon2 ${r.filter((x) => x.tier === 1).length}/40  checkpoint results: ${['0', '1', '2', '3', '4'].map((b, i) => `${'CUREL'[i]} ${cps.filter((c) => c === b).length}`).join(' ')} loops ${cps.filter((c) => c.endsWith('L')).length} (of ${cps.length})`);
+  console.log(`  ${bot.padEnd(7)} win ${r.filter((x) => x.won).length}/40  weapon2 ${r.filter((x) => x.tier === 1).length}/40  checkpoint results: ${['0', '1', '2', '3', '4'].map((b, i) => `${'CUREL'[i]} ${cps.filter((c) => c === b).length}`).join(' ')} loops ${cps.filter((c) => c.endsWith('L')).length} (of ${cps.length})  crate median ${med(r.flatMap((x) => x.crates))}`);
 }
 console.log('\nerrors', errors.length ? errors.slice(0, 5) : 'none');
 await browser.close(); srv.close();

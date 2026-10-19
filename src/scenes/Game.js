@@ -3,7 +3,8 @@ import { ERAS, WEAPONS, MAX_TIER, tierDps } from '../eras.js';
 import { buildLevel, levelInfo } from '../level.js';
 import { CheckpointMethods } from '../checkpoint.js';
 import { POWERUPS, payout, LAP } from '../powerups.js';
-import { GEMS } from '../tuning.js';
+import { GEMS, CRATES } from '../tuning.js';
+import { CrateMethods } from '../crates.js';
 import { Save } from '../save.js';
 import { runMods, UPGRADES, upgCost } from '../upgrades.js';
 import { Sound } from '../audio.js';
@@ -104,6 +105,8 @@ export class GameScene extends Phaser.Scene {
     (this.gems || []).forEach((g) => g.img?.destroy());
     this.gems = [];
     this.combo = 0;
+    this.trailRun = 0;
+    this.clearPops?.();
     this.resetPowers();
     this.d = 0; this.px = 0; this.tx = 0;
     this.mods = runMods(this.testUpg || Save.data.upg);
@@ -115,13 +118,14 @@ export class GameScene extends Phaser.Scene {
     this.showBossBar?.(false);
     this.rateB = 0; this.dmgB = 0; this.extra = 0;
     this.fireT = 0.3; this.time = 0; this.lastHurt = -99; this.recoil = 0;
-    this.stats = { kills: 0, blocks: 0, gates: 0, damage: 0, hitsTaken: 0, gems: 0, gemsMissed: 0, hurtBySection: [0, 0, 0, 0, 0, 0], coins: 0, checkpoints: [] };
+    this.stats = { kills: 0, blocks: 0, gates: 0, damage: 0, hitsTaken: 0, gems: 0, gemsMissed: 0, hurtBySection: [0, 0, 0, 0, 0, 0], coins: 0, checkpoints: [], crates: [], trailGems: 0, trailMissed: 0 };
     this.eraTimes = [0];
     this.tierTimes = [0];
     this.finishPassed = false;
     this.finishZ = this.level.finish;
     this.setEraVisuals(this.info.era, true);
     this.weaponImg.setTexture('weapon_' + this.weapon.key);
+    this.refreshWeaponLook?.();
     this.updateHud(true);
   }
 
@@ -149,7 +153,8 @@ export class GameScene extends Phaser.Scene {
   update(_t, deltaMs) {
     const dt = Math.min(deltaMs / 1000, 0.05);
     if (this.mode === 'play' && this.pauseT > 0) {
-      // checkpoint reveal: the world holds still for a moment
+      // arch reveal: slow motion while the card drops and flips
+      this.step(dt * 0.1);
       this.render();
       return;
     }
@@ -201,6 +206,7 @@ export class GameScene extends Phaser.Scene {
     this.stepPowers(dt);
 
     this.stepGems(dt);
+    this.stepPops(dt);
     if (this.boss) { this.bossStep(dt); if (this.mode !== 'play') return; }
 
     // projectiles
@@ -218,7 +224,7 @@ export class GameScene extends Phaser.Scene {
       p.z = nz;
       if (best) {
         this.hit(best, p);
-        if (p.pierce > 0 && (best.type === 'enemy' || best.type === 'block')) { p.pierce--; (p.hitSet ||= new Set()).add(best); }
+        if (p.pierce > 0 && (best.type === 'enemy' || best.type === 'block' || best.type === 'crate')) { p.pierce--; (p.hitSet ||= new Set()).add(best); }
         else p.dead = true;
       }
       else if (p.z > RANGE) p.dead = true;
@@ -229,6 +235,8 @@ export class GameScene extends Phaser.Scene {
       if (o.dead) continue;
       if (o.type === 'checkpoint') {
         if (!o.used && o.z <= 0) this.cashOut(o);
+      } else if (o.type === 'crate') {
+        if (!o.used && o.z <= 30) this.burstCrate(o);
       } else if (o.type === 'gate') {
         if (!o.pair.used && o.z <= 0) this.takeGate(o.pair);
       } else if ((o.type === 'enemy' || o.type === 'block') && o.z < 30 && o.z > -40 && Math.abs(o.x - this.px) < o.halfW + 30) {
@@ -255,10 +263,13 @@ export class GameScene extends Phaser.Scene {
     const n = this.shots;
     const spacing = e.spacing * Math.min(1.3, this.pu.size);
     const volleys = 1 + this.pu.double; // Double Shot: extra volleys just behind the first
-    for (let v = 0; v < volleys; v++) {
-      for (let i = 0; i < n; i++) {
-        const x = this.px + (i - (n - 1) / 2) * spacing + (v % 2 ? spacing / 2 : 0);
-        this.spawnProj({ x, z: 40 - v * 45, speed: e.pspeed, r: e.pr * this.pu.size, dmg: this.dmg, pierce: this.pu.pierce, tex: 'p_' + e.proj, sc: this.pu.size });
+    const muzzles = [0, ...this.twinOffsets()]; // Twin Weapon copies fire the same volley
+    for (const mx of muzzles) {
+      for (let v = 0; v < volleys; v++) {
+        for (let i = 0; i < n; i++) {
+          const x = this.px + mx + (i - (n - 1) / 2) * spacing + (v % 2 ? spacing / 2 : 0);
+          this.spawnProj({ x, z: 40 - v * 45, speed: e.pspeed, r: e.pr * this.pu.size, dmg: this.dmg, pierce: this.pu.pierce, tex: 'p_' + e.proj, sc: this.pu.size });
+        }
       }
     }
     this.recoil = e.recoil;
@@ -290,9 +301,11 @@ export class GameScene extends Phaser.Scene {
       }
       return;
     }
+    if (o.type === 'crate') { this.hitCrate(o, p); return; }
     const dealt = Math.min(p.dmg, o.hp);
     o.hp -= p.dmg;
     this.stats.damage += dealt;
+    this.addPop(o, dealt);
     if (o.hp <= 0.0001) {
       this.kill(o, true);
     } else {
@@ -324,8 +337,9 @@ export class GameScene extends Phaser.Scene {
   // XP gems drop where an enemy/block dies and lie on the track: steer within reach to pick them up.
   // XP is the target's full (nominal) HP, split over its gems; gems you miss are lost.
   dropGems(o) {
-    const n = o.type === 'block' ? GEMS.perKill.block : o.size > 1.3 ? GEMS.perKill.big : GEMS.perKill.enemy;
-    const xp = (o.xpVal ?? o.maxHp) / n;
+    const per = o.type === 'block' ? GEMS.perKill.block : o.size > 1.3 ? GEMS.perKill.big : GEMS.perKill.enemy;
+    const n = Math.floor(per) + (Math.random() < per % 1 ? 1 : 0);
+    const xp = 1;
     for (let i = 0; i < n; i++) {
       // pop away from where you are, so a gem always takes a bit of steering to grab
       let side = Math.sign(o.x - this.px) || (Math.random() < 0.5 ? -1 : 1);
@@ -342,8 +356,14 @@ export class GameScene extends Phaser.Scene {
       if (!g.pull) {
         g.z -= this.runSpeed * dt;
         const mag = this.pu.magnet;
-        if (g.z < GEM_REACH_Z * Math.min(2.2, mag) && g.z > -30 && Math.abs(g.x - this.px) < GEM_REACH_X * mag) g.pull = true;
-        else if (g.z < -60) { g.dead = true; this.stats.gemsMissed++; this.combo = Math.max(0, this.combo - COMBO_MISS); continue; }
+        const reach = (g.trail ? GEMS.trailReachX : GEM_REACH_X) * mag;
+        const near = (x) => Math.abs(g.x - x) < reach;
+        if (g.z < GEM_REACH_Z * Math.min(2.2, mag) && g.z > -30 && (near(this.px) || this.twinOffsets().some((o) => near(this.px + o) && g.trail))) g.pull = true;
+        else if (g.z < -60) {
+          g.dead = true; this.stats.gemsMissed++; this.combo = Math.max(0, this.combo - COMBO_MISS);
+          if (g.trail) { this.stats.trailMissed++; this.trailRun = 0; }
+          continue;
+        }
       }
       if (g.pull) {
         const k = Math.min(1, dt * 9);
@@ -359,15 +379,19 @@ export class GameScene extends Phaser.Scene {
   get xpMul() { return 1 + this.combo; }
   collectGem(g) {
     this.stats.gems++;
+    if (g.trail) { this.stats.trailGems++; this.trailRun++; }
     this.gainXp(g.xp * this.xpMul);
-    this.addMeter(this.xpMul); // checkpoint meter: 1 point per gem, plus the streak bonus
+    this.addMeter(this.xpMul); // arch meter: 1 point per gem, plus the streak bonus
     this.combo = Math.min(1, this.combo + COMBO_GAIN);
     if (this.simulating) return;
-    Sound.play('gem');
+    // rising pitch while you stay on a trail
+    if (g.trail) Sound.play('gemTrail', this.trailRun); else Sound.play('gem');
     const pr = project(g.x, Math.max(g.z, 0));
     const gem = this.add.image(pr.x, pr.y - 20, 'gem').setScale(0.6);
     this.fx.add(gem);
-    this.tweens.add({ targets: gem, x: 60 + this.xpFrac() * 420, y: 122 + (this.hudY || 0), scale: 0.35, duration: 420, ease: 'Cubic.easeIn', onComplete: () => { gem.destroy(); this.pulseXp(); } });
+    // gems fly up into the meter on the next arch if it's in view, otherwise into the HUD meter
+    const tgt = this.archMeterPoint();
+    this.tweens.add({ targets: gem, x: tgt.x, y: tgt.y, scale: tgt.s, duration: 380, ease: 'Cubic.easeIn', onComplete: () => { gem.destroy(); this.pulseXp(); this.meterPulse = 1; } });
   }
 
   gainXp(v) {
@@ -389,8 +413,9 @@ export class GameScene extends Phaser.Scene {
     if (newEra) this.eraTimes.push(this.time);
     if (this.simulating) return;
     const w = this.weapon, e = ERAS[this.era];
-    this.weaponImg.setTexture('weapon_' + w.key);
-    this.tweens.add({ targets: this.weaponImg, scale: { from: TK * (newEra ? 1.6 : 1.35), to: TK }, duration: 420, ease: 'Back.easeOut' });
+    this.refreshWeaponLook();
+    const sc0 = this.weaponImg.scaleX;
+    this.tweens.add({ targets: this.weaponImg, scale: { from: sc0 * (newEra ? 1.6 : 1.35), to: sc0 }, duration: 420, ease: 'Back.easeOut' });
     if (newEra) {
       this.cameras.main.flash(260, 255, 255, 255);
       Sound.play('evolve');
@@ -477,6 +502,8 @@ export class GameScene extends Phaser.Scene {
       });
     } else if (it.type === 'checkpoint') {
       this.spawnCheckpoint(it, z);
+    } else if (it.type === 'crate') {
+      this.spawnCrate(it, z);
     } else if (it.type === 'finish') {
       const c = this.add.container(0, 0);
       const flag = this.add.image(0, 0, 'flag').setOrigin(0.5, 1).setScale(TK);
@@ -510,11 +537,17 @@ export class GameScene extends Phaser.Scene {
       // keep numbers readable far away: never shrink text below ~45% of full size on screen
       const ts = Math.max(1, 0.45 / pr.s);
       if (o.hpText) o.hpText.setScale(ts);
-      if (o.type === 'checkpoint') o.label.setScale(Math.max(1, 0.4 / pr.s));
+      if (o.type === 'checkpoint') { o.label.setScale(Math.max(1, 0.4 / pr.s)); this.renderArchMeter(o); }
+      if (o.type === 'crate') {
+        o.pop = Math.max(1, (o.pop || 1) - 0.04);
+        o.num.setScale(Math.max(1, 0.42 / pr.s) * o.pop); o.tag.setScale(Math.max(1, 0.36 / pr.s));
+        o.img.y = -Math.abs(Math.sin(this.time * 3)) * 4;
+      }
       if (o.type === 'gate') { o.value.setScale(Math.max(1, 0.3 / pr.s) * (o.pop || 1)); o.label.setScale(Math.max(1, 0.36 / pr.s)); }
       const fade = o.z > 1500 ? Phaser.Math.Clamp((SPAWN_Z - o.z) / 400, 0, 1) : 1;
       o.c.setAlpha(fade);
       if (o.img && o.type !== 'gate' && o.type !== 'checkpoint') {
+        if (o.type === 'crate') { if (o.flash > 0) o.img.setTint(0xbff6ff); else o.img.clearTint(); continue; }
         if (o.flash > 0) { if (o.type === 'boss') o.img.setTint(0xffb0a0); else o.img.setTintFill(0xffffff); }
         else if (o.size > 1.3 && o.type === 'enemy') o.img.setTint(0xffd0c0);
         else o.img.clearTint();
@@ -526,7 +559,7 @@ export class GameScene extends Phaser.Scene {
       if (!g.img) g.img = this.add.image(0, 0, 'gem');
       const pr = project(g.x, Math.max(g.z, -100));
       const bob = Math.sin(this.time * 6 + g.t) * 6;
-      g.img.setPosition(pr.x, pr.y - (24 + bob) * pr.s).setScale(TK * 2.1 * pr.s).setDepth(10 + FAR - g.z);
+      g.img.setPosition(pr.x, pr.y - (24 + bob) * pr.s).setScale(TK * (g.trail ? 2.3 : 2.1) * pr.s).setDepth(10 + FAR - g.z);
     }
     this.renderBoss();
     for (const p of this.projs) {
@@ -541,6 +574,7 @@ export class GameScene extends Phaser.Scene {
     this.player.setPosition(CX + this.px, PY);
     this.weaponImg.y = -6 + this.recoil;
     this.weaponImg.angle = Phaser.Math.Clamp((this.tx - this.px) * 0.12, -12, 12);
+    this.renderWeaponLook();
     this.updateHud(false);
   }
 
@@ -681,7 +715,9 @@ export class GameScene extends Phaser.Scene {
     this.player = this.add.container(CX, PY).setDepth(10 + FAR);
     const sh = this.add.image(0, 2, 'shadow').setScale(TK * 1.0, TK * 0.8);
     this.weaponImg = this.add.image(0, -6, 'weapon_stone').setOrigin(0.5, 0.92).setScale(TK);
-    this.player.add([sh, this.weaponImg]);
+    this.twinC = this.add.container(0, 0);
+    this.modC = this.add.container(0, 0);
+    this.player.add([sh, this.twinC, this.weaponImg, this.modC]);
   }
 
   createHud() {
@@ -705,7 +741,7 @@ export class GameScene extends Phaser.Scene {
     this.statText = wrap(this.add.text(518, 82, '', style(14, '#ffffff', 4, { align: 'right', lineSpacing: 1 })).setOrigin(1, 0.5));
     this.xpText = wrap(this.add.text(270, 124, '', style(14, '#ffffff', 4)).setOrigin(0.5));
     // checkpoint meter (5 rarity bands) and the active power-up icons under the panel
-    wrap(this.add.text(22, 151, 'CHECKPOINT', style(11, '#cccccc', 3)).setOrigin(0, 0.5));
+    wrap(this.add.text(22, 151, 'POWER METER', style(11, '#cccccc', 3)).setOrigin(0, 0.5));
     this.meterText = wrap(this.add.text(518, 151, '', style(13, '#ffffff', 4)).setOrigin(1, 0.5));
     this.puIcons = wrap(this.add.container(0, 208));
     this.hurtFlash = this.add.rectangle(0, 0, W, H, 0xff0000, 0).setOrigin(0).setDepth(D0 - 10);
@@ -909,6 +945,9 @@ export class GameScene extends Phaser.Scene {
     }
     const enemies = this.objs.filter((o) => o.type === 'enemy' && !o.dead && o.z > 30 && o.z < 1400).sort((a, b) => a.z - b.z);
     let target = enemies.length ? enemies[0].x : 0;
+    // line up on a gem crate to pump its number when nothing dangerous is close
+    const crate = this.objs.find((o) => o.type === 'crate' && !o.used && !o.dead && o.z > 80 && o.z < 1500);
+    if (crate && (!enemies.length || enemies[0].z > 420 || enemies[0].z > crate.z) && Math.random() < (human ? 0.55 : casual ? 0.8 : 1)) target = crate.x;
     // go for XP gems lying ahead when they're closer than the next enemy (sloppier bots notice less often)
     const gem = this.gems.filter((g) => !g.pull && g.z > 0 && g.z < 420).sort((a, b) => a.z - b.z)[0];
     if (gem && (!casual || !enemies.length || gem.z < enemies[0].z) && Math.random() < (human ? 0.45 : casual ? 0.75 : 1)) target = gem.x;
@@ -968,7 +1007,7 @@ export class GameScene extends Phaser.Scene {
         s.tier = tier; s.xp = 0;
         s.rateB = boosts.rate; s.dmgB = boosts.dmg; s.extra = boosts.extra;
         s.setEraVisuals(era, true);
-        s.weaponImg.setTexture('weapon_' + s.weapon.key);
+        s.refreshWeaponLook();
         s.d = s.level.finish - 125;
         s.updateHud(true);
       },
@@ -995,7 +1034,7 @@ export class GameScene extends Phaser.Scene {
         for (let i = 0; i < steps && s.mode === 'play'; i++) { if (s.bot) s.botSteer(1 / 60); s.step(1 / 60); }
         s.simulating = false;
         s.setEraVisuals(s.era, true);
-        s.weaponImg.setTexture('weapon_' + s.weapon.key);
+        s.refreshWeaponLook();
         s.updateHud(true);
         if (wasPlaying && !opts.visual && s.mode !== 'play' && s.lastResult) s.showEnd(s.lastResult);
         return window.__ER.state();
@@ -1004,4 +1043,4 @@ export class GameScene extends Phaser.Scene {
   }
 }
 
-Object.assign(GameScene.prototype, BossMethods, ScreenMethods, CheckpointMethods);
+Object.assign(GameScene.prototype, BossMethods, ScreenMethods, CheckpointMethods, CrateMethods);

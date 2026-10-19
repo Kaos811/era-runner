@@ -109,3 +109,22 @@ Code layout: `src/eras.js` (era stats and colours), `src/level.js` (level layout
 `src/scenes/Boot.js` (generated art), `src/scenes/Game.js` (gameplay, rendering, HUD), `src/bosses.js` (boss fights),
 `src/screens.js` (title, shop, settings, end screens), `src/upgrades.js` (shop tuning), `src/save.js` (localStorage),
 `src/audio.js` (procedural sound and music), `src/ui.js` (buttons and text styles).
+
+## Stage 5 — Gem crates, meter arches, weapon transforms
+
+- **Gem crates** (one per segment, 5 per level) are the main gem source. Each is themed per era and
+  shows a number; shooting it raises the number (scaled by your damage, fire rate and shots, capped at 40).
+  Reaching it shatters it into a weaving trail of that many gems — steer through it.
+  Enemies only drop a few gems. Gems still give XP toward weapon 2.
+- **Meter arches** (5 per level, one every ~12–13 s, the last right before the boss) replace checkpoints.
+  Trail gems fly into the upcoming arch's meter (shown on the arch and on the HUD):
+  Common 5 → Uncommon 9 → Rare 14 → Epic 22 → Legendary 38. Past Legendary it loops to Common and
+  each full lap banks an extra Legendary. Passing under cashes out in slow-mo with a card flip.
+- **Visible weapon transforms**: extra barrels, glowing pierce tip, ember (explosive), ring (double shot),
+  sparks (chain). **Twin Weapon** (Legendary) adds a copy of your weapon that fires alongside it and
+  follows weapon upgrades. No allies/drones (Drone Buddy was removed from the pool).
+- **Damage numbers** pop off hits, aggregated per target every ~0.2 s (boss ~0.4 s).
+- 3 shootable gates per level.
+- Tuning knobs: `src/tuning.js` (`GEMS`, `CRATES`), `src/powerups.js` (`RARITIES`, `POWERUPS`),
+  `src/level.js` (`SEG_ROWS`, `CRATE_AT`, `ARCH_AT`), `src/bosses.js` (`REF_BOOST`, per-boss hp).
+- Tests: `node tests/e2e.mjs`, screenshots `node tests/screens-stage5.mjs`, bot tuning `node tests/tune4.mjs`.
