@@ -3,10 +3,11 @@ import { ERAS, WEAPONS, MAX_TIER, tierDps } from '../eras.js';
 import { buildLevel, levelInfo } from '../level.js';
 import { CheckpointMethods } from '../checkpoint.js';
 import { POWERUPS, payout, LAP } from '../powerups.js';
-import { GEMS, CRATES, BONUS, COINS } from '../tuning.js';
+import { GEMS, CRATES, BONUS, COINS, WAVES } from '../tuning.js';
 import { BonusMethods } from '../bonus.js';
 import { YearMethods } from '../years.js';
 import { CrateMethods } from '../crates.js';
+import { WaveMethods } from '../waves.js';
 import { Save } from '../save.js';
 import { runMods, UPGRADES, upgCost } from '../upgrades.js';
 import { Sound } from '../audio.js';
@@ -193,17 +194,22 @@ export class GameScene extends Phaser.Scene {
     this.px += (this.tx - this.px) * Math.min(1, dt * 14);
 
     // move objects
+    // shot blockers still ahead of you: gates (whole track) and gem crates (one lane)
+    const blockers = this.objs.filter((o) => !o.dead && !o.used && o.z > 0 && ((o.type === 'gate' && !o.pair.used) || o.type === 'crate'));
     for (const o of this.objs) {
       if (o.dead) continue;
       if (o.flash > 0) o.flash -= dt;
       if (o.type === 'boss') continue;
-      o.z -= (this.runSpeed + (o.walk || 0)) * dt;
-      if (o.type === 'enemy' && o.z < 1100 && o.z > 60) {
+      if (o.charger && o.type === 'enemy') this.stepCharger(o, dt, blockers);
+      else o.z -= (this.runSpeed + (o.walk || 0)) * dt;
+      if (o.type === 'enemy' && o.z < 1100 && o.z > 60 && !o.ch) {
         const dx = this.px - o.x;
         o.x += Math.sign(dx) * Math.min(Math.abs(dx), HOMING * dt);
       }
+      if (o.type === 'enemy') this.holdBehindBlockers(o, blockers);
       if (o.flash > 0) o.flash -= dt;
     }
+    this.separateEnemies(dt);
 
     // fire
     this.fireT -= dt;
@@ -328,7 +334,7 @@ export class GameScene extends Phaser.Scene {
     o.dead = true;
     if (byShot) {
       if (o.type === 'enemy') this.stats.kills++; else this.stats.blocks++;
-      this.addCoins(this.levelCoins(o.type === 'block' ? 2 : o.size > 1.3 ? 3 : 1), o);
+      this.addCoins(this.levelCoins((o.type === 'block' ? 2 : o.size > 1.3 ? 3 : 1) * COINS.kill), o);
       this.dropGems(o);
     }
     if (this.simulating) return;
@@ -492,7 +498,13 @@ export class GameScene extends Phaser.Scene {
       c.add([sh, img, hpText]);
       if (it.size > 1.3 && isE) img.setTint(0xffd0c0);
       this.objs.push({ type: it.type, section: it.section, c, img, hpText, x: it.x, z, hp: it.hp, maxHp: it.hp, xpVal: it.xpVal, size: it.size, dmg: it.dmg, halfW: (isE ? 36 : 50) * it.size,
-        walk: isE ? 45 : 0, hittable: true, eraLook: look, bob: Math.random() * 6 });
+        walk: isE ? (it.walk ?? WAVES.walk) : 0, charger: !!it.charger, hittable: true, eraLook: look, bob: Math.random() * 6 });
+      if (it.charger) {
+        img.setTint(0xff7a6a);
+        const tag = this.add.text(0, -178 * it.size, '!', style(40, '#ff3b30', 7)).setOrigin(0.5);
+        c.add(tag);
+        this.objs[this.objs.length - 1].chTag = tag;
+      }
     } else if (it.type === 'gate') {
       const pair = { used: false, objs: [] };
       it.gates.forEach((gd, i) => {
@@ -568,6 +580,7 @@ export class GameScene extends Phaser.Scene {
       if (o.img && o.type !== 'gate' && o.type !== 'checkpoint') {
         if (o.type === 'crate') { if (o.flash > 0) o.img.setTint(0xbff6ff); else o.img.clearTint(); continue; }
         if (o.flash > 0) { if (o.type === 'boss') o.img.setTint(0xffb0a0); else o.img.setTintFill(0xffffff); }
+        else if (o.charger) o.img.setTint(o.ch && o.ch.phase === 'aim' && Math.sin(this.time * 30) > 0 ? 0xffffff : 0xff7a6a);
         else if (o.size > 1.3 && o.type === 'enemy') o.img.setTint(0xffd0c0);
         else o.img.clearTint();
       } else if (o.type === 'gate') {
@@ -644,6 +657,7 @@ export class GameScene extends Phaser.Scene {
       }
     }
     this.drawBossWarns(quad);
+    this.drawChargerWarns(quad);
     // horizon fog
     const f = this.fog;
     f.clear();
@@ -960,6 +974,7 @@ export class GameScene extends Phaser.Scene {
     if (casual && this.botT > 0) return;
     this.botT = human ? 0.7 : casual ? 0.45 : 0;
     if (this.boss) { this.botBoss(human, casual); return; }
+    if (this.botCharger(human, casual)) return;
     const gates = this.objs.filter((o) => o.type === 'gate' && !o.dead && !o.pair.used && o.z > 0 && o.z < 1000);
     if (gates.length) {
       const pair = gates[0].pair;
@@ -1040,7 +1055,7 @@ export class GameScene extends Phaser.Scene {
         s.d = s.level.finish - 125;
         s.updateHud(true);
       },
-      save: Save, upgrades: UPGRADES, upgCost,
+      save: Save, upgrades: UPGRADES, upgCost, buildLevel, WAVES,
       // balance testing: override upgrade levels for the next runs without touching the save
       setTestUpgrades: (u, noSave = true) => { s.testUpg = u; s.noSave = noSave; },
       // page coordinates of a named UI button (for tests)
@@ -1072,4 +1087,4 @@ export class GameScene extends Phaser.Scene {
   }
 }
 
-Object.assign(GameScene.prototype, BossMethods, ScreenMethods, CheckpointMethods, CrateMethods, BonusMethods, YearMethods);
+Object.assign(GameScene.prototype, BossMethods, ScreenMethods, CheckpointMethods, CrateMethods, BonusMethods, YearMethods, WaveMethods);

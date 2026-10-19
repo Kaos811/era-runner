@@ -108,7 +108,7 @@ try {
   const d0 = (await page.evaluate(() => __ER.sim(1.2))).d;
   const mid = await page.evaluate(() => __ER.sim(3));
   check('track stops during the boss fight', mid.d - d0 < 40, `moved ${(mid.d - d0).toFixed(0)}`);
-  check('coins were collected on the way', mid.coins > 30, `${mid.coins} coins`);
+  check('coins were collected on the way', mid.coins > 20, `${mid.coins} coins`);
   // boss down -> the BONUS RUN: multiplier rows across the track, the track moves again
   const bon = await page.evaluate(() => { const s = __ER.scene; s.simulating = true; let t = 0; while (s.mode === 'play' && !s.bonus && t < 60) { s.botSteer(1 / 60); s.step(1 / 60); t += 1 / 60; } s.simulating = false; const st = __ER.state(); const d0 = s.d; __ER.sim(1); return { st, moved: s.d - d0 }; });
   const rows = bon.st.bonus?.rows || [];
@@ -289,6 +289,71 @@ try {
     return { v0, v: g.gate.value, t: tt };
   });
   check('a red -20% gate turns green before you reach it (Stone Age, 1 shot)', gate.v > 0, `${gate.v0} -> ${gate.v} in ${gate.t.toFixed(1)}s`);
+
+  // wave layout: clear zones around gates and no stacked enemies, Levels 1-12
+  const lay2 = await page.evaluate(() => {
+    const W = __ER.WAVES, R = W.run, out = [];
+    for (let n = 1; n <= 12; n++) {
+      const L = __ER.buildLevel(n);
+      const gates = L.items.filter((i) => i.type === 'gate').map((i) => i.at);
+      const en = L.items.filter((i) => i.type === 'enemy' || i.type === 'block');
+      let after = 99, before = 99, stacked = 0, spawnBehind = 0;
+      for (const G of gates) for (const e of en) {
+        const d = (e.arrive - G) / R; if (d >= 0) after = Math.min(after, d); else { before = Math.min(before, -d); if (e.at > G) spawnBehind++; }
+      }
+      for (let i = 0; i < en.length; i++) for (let j = i + 1; j < en.length; j++) if (Math.abs(en[i].arrive - en[j].arrive) < W.inWave * R - 1 && Math.abs(en[i].x - en[j].x) < W.minDx) stacked++;
+      out.push({ n, after: +after.toFixed(2), before: +before.toFixed(2), stacked, spawnBehind, chargers: en.filter((e) => e.charger).length, enemies: en.length });
+    }
+    return { out, gateAfter: W.gateAfter, gateBefore: W.gateBefore };
+  });
+  check('every level keeps a clear zone around each gate (nothing arrives just before / after it, nothing walks through it)', lay2.out.every((l) => l.after >= lay2.gateAfter - 0.05 && l.before >= lay2.gateBefore - 0.05 && l.spawnBehind === 0), JSON.stringify(lay2.out.map((l) => [l.n, l.before, l.after])));
+  check('waves are spread: no two enemies stacked in one spot (Levels 1-12)', lay2.out.every((l) => l.stacked === 0), lay2.out.map((l) => l.stacked).join(','));
+  check('chargers only from Level 4, later levels have more waves', lay2.out[2].chargers === 0 && lay2.out.slice(3).every((l) => l.chargers > 0) && lay2.out[9].enemies > lay2.out[0].enemies, lay2.out.map((l) => `${l.n}:${l.enemies}/${l.chargers}`).join(' '));
+
+  // runtime: an enemy can't close in on a gate that is still in front of it
+  const hold = await page.evaluate(() => {
+    const s = __ER.scene; s.closeScreen(); s.mode = 'won'; s.startRun(7); __ER.setBot(null);
+    s.objs.forEach((o) => { o.dead = true; }); s.qi = s.level.items.length;
+    s.spawn({ type: 'gate', at: s.d + 1200, gates: [{ kind: 'rate', value: 10 }, { kind: 'dmg', value: 10 }], section: 0 });
+    s.spawn({ type: 'enemy', at: s.d + 1600, x: 0, hp: 99999, size: 1, dmg: 1, section: 0, ref: 1e-9, walk: s.info.walk });
+    const g = s.objs.find((o) => o.type === 'gate'), e = s.objs.find((o) => o.type === 'enemy');
+    let minGap = 1e9;
+    for (let i = 0; i < 400 && !g.pair.used; i++) { s.step(1 / 60); if (!g.pair.used) minGap = Math.min(minGap, e.z - g.z); }
+    return { minGap: Math.round(minGap), want: Math.round(__ER.WAVES.holdAfter * (330 + s.info.walk)), ez: Math.round(e.z), used: g.pair.used };
+  });
+  check('an enemy behind a gate is held back until you pass it', hold.used && hold.minGap >= hold.want - 8 && hold.ez >= hold.want - 20, JSON.stringify(hold));
+
+  // runtime: enemies on top of each other push apart sideways
+  const sep = await page.evaluate(() => {
+    const s = __ER.scene; s.closeScreen(); s.mode = 'won'; s.startRun(2); __ER.setBot(null);
+    s.objs.forEach((o) => { o.dead = true; }); s.qi = s.level.items.length; s.tx = s.px = 200;
+    for (let i = 0; i < 2; i++) s.spawn({ type: 'enemy', at: s.d + 1500, x: -60, hp: 99999, size: 1, dmg: 1, section: 0, ref: 1e-9, walk: 45 });
+    for (let i = 0; i < 90; i++) s.step(1 / 60);
+    const e = s.objs.filter((o) => o.type === 'enemy' && !o.dead);
+    return { dx: Math.round(Math.abs(e[0].x - e[1].x)) };
+  });
+  check('enemies spawned on the same spot spread apart', sep.dx >= 90, `dx ${sep.dx}`);
+
+  // charger (Level 4+): telegraphs your lane, then rushes it; steering out dodges it, staying gets hit
+  const charge = await page.evaluate(() => {
+    const s = __ER.scene; const C = __ER.WAVES.charger;
+    const run = (dodge) => {
+      s.closeScreen(); s.mode = 'won'; s.startRun(4); __ER.setBot(null);
+      s.objs.forEach((o) => { o.dead = true; }); s.qi = s.level.items.length; s.tx = s.px = 0;
+      s.spawn({ type: 'enemy', at: s.d + 1150, x: 150, hp: 99999, size: 1.05, dmg: 16, section: 0, ref: 1e-9, walk: s.info.walk, charger: true });
+      const e = s.objs.find((o) => o.charger);
+      const hits0 = s.stats.hitsTaken; let aimAt = null, rushAt = null, lane = null, aimZ = null;
+      for (let i = 0; i < 60 * 6 && !e.dead; i++) {
+        s.step(1 / 60);
+        if (e.ch && aimAt === null) { aimAt = s.time; lane = e.ch.lane; aimZ = Math.round(e.z); if (dodge) s.tx = 150; }
+        if (e.ch?.phase === 'rush' && rushAt === null) rushAt = s.time;
+      }
+      return { aim: aimAt !== null, lane, aimZ, tele: rushAt && aimAt ? +(rushAt - aimAt).toFixed(2) : null, hit: s.stats.hitsTaken - hits0 };
+    };
+    return { stay: run(false), dodge: run(true), want: C.aim };
+  });
+  check('a charger telegraphs (marks your lane) before rushing', charge.stay.aim && charge.stay.lane === 0 && charge.stay.tele >= charge.want - 0.02 && charge.stay.aimZ >= 600, JSON.stringify(charge.stay));
+  check('staying in the marked lane gets you hit, steering out dodges it', charge.stay.hit === 1 && charge.dodge.hit === 0, `stay ${charge.stay.hit} hit, dodge ${charge.dodge.hit} hit`);
 
   // reset progress (confirmed) wipes the save
   await page.evaluate(() => { const s = __ER.scene; s.mode = 'won'; s.showTitle(); });

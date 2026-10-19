@@ -116,7 +116,7 @@ Code layout: `src/eras.js` (era stats and colours), `src/level.js` (level layout
   shows a number; shooting it raises the number (scaled by your damage, fire rate and shots, capped at 40).
   Reaching it shatters it into a weaving trail of that many gems — steer through it.
   Enemies only drop a few gems. Gems still give XP toward weapon 2.
-- **Meter arches** (5 per level, one every ~12–13 s, the last right before the boss) replace checkpoints.
+- **Meter arches** (5 per level, one every ~14 s since Stage 7, the last right before the boss) replace checkpoints.
   Trail gems fly into the upcoming arch's meter (shown on the arch and on the HUD):
   Common 5 → Uncommon 9 → Rare 14 → Epic 22 → Legendary 38. Past Legendary it loops to Common and
   each full lap banks an extra Legendary. Passing under cashes out in slow-mo with a card flip.
@@ -146,3 +146,26 @@ Code layout: `src/eras.js` (era stats and colours), `src/level.js` (level layout
   (aggregated every 0.5 s). Level 7+ reuses the ranges with a "LOOP 2" tag. Code: `src/years.js`.
 - Tests: `node tests/e2e.mjs`; bonus/economy tuning `node tests/tune-bonus.mjs`;
   screenshots `node tests/screens-bonus.mjs`.
+
+## Stage 7 — Gate clear zones, spread waves, chargers
+
+Gates still block your shots (by design). Before, walking enemies caught up with gates, so a
+wave often sat hidden right behind a gate and hit you just after you passed it (about half of all
+hits a weak player took were within 2.5 s after a gate).
+
+- **Waves are laid out by arrival time** (`buildLevel` in `src/level.js`, knobs in `WAVES` in
+  `src/tuning.js`). Nothing arrives within 0.6 s before or 1.8 s after a gate (~650 units out
+  when you pass it), and anything arriving before a gate also spawns in front of it, so it never
+  walks through the gate while hidden. Waves have a minimum gap (scaled by enemy speed) and
+  spare room is spread evenly; enemies in a wave are >= 110 apart sideways or >= 0.3 s apart.
+- **Runtime guards** (`src/waves.js`): an enemy can't close in on a gate (or a gem crate in its
+  lane) that is still in front of it; enemies that end up on top of each other push apart.
+- **Harder later on, fairly**: enemies walk a bit faster per era / loop, wave HP is up ~10–30%
+  (per-era, bot-tuned), Level 2+ gets an extra wave, loops another one, and from Level 4 on
+  **chargers** (red, "!") walk in, stop at ~950 units and flash your lane red for 0.65 s, then
+  rush down that lane. Steer out or kill them fast. They never telegraph while a gate hides them.
+- Levels are ~9 % longer (LEN 23000, arches every ~14 s). Kill coins x0.72 keep coins per win
+  about the same.
+- Tests: `node tests/e2e.mjs` (layout, gate hold, spreading, charger dodge checks);
+  static layout `node tests/layout-check.mjs`; bot stats `node tests/tune-gates.mjs`
+  (`DIST_DIR=<old dist>` to compare builds); screenshots `node tests/screens-waves.mjs`.

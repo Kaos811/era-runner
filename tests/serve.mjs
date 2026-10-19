@@ -2,7 +2,7 @@ import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { extname, join, resolve } from 'node:path';
 
-const ROOT = resolve(new URL('..', import.meta.url).pathname, 'dist');
+const ROOT = process.env.DIST_DIR ? resolve(process.env.DIST_DIR) : resolve(new URL('..', import.meta.url).pathname, 'dist');
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png' };
 
 export function serveDist() {
