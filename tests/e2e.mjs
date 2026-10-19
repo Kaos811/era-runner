@@ -293,8 +293,11 @@ try {
   // reset progress (confirmed) wipes the save
   await page.evaluate(() => { const s = __ER.scene; s.mode = 'won'; s.showTitle(); });
   await sleep(500);
-  await tap('settings');
-  if (!(await ui('reset'))) { console.log('  (settings tap missed, retrying)', JSON.stringify(await state()).slice(0, 120)); await tap('settings'); } await tap('reset'); if (!(await ui('resetYes'))) { console.log('  (reset tap missed, retrying)'); await sleep(300); await tap('reset'); } await tap('resetYes');
+  // the headless page runs at a few fps by now, so a tap can be dropped: retry until the next button shows
+  const tapTill = async (name, ok) => { for (let k = 0; k < 4; k++) { if (await ok()) return; if (await ui(name)) await tap(name); else await sleep(300); } };
+  await tapTill('settings', async () => !!(await ui('reset')));
+  await tapTill('reset', async () => !!(await ui('resetYes')));
+  await tapTill('resetYes', async () => (await save()).coins === 0);
   sv = await save();
   check('confirmed reset wipes coins and upgrades', sv.coins === 0 && sv.upg.dmg === 0 && sv.music === false);
   await sleep(300);
