@@ -103,13 +103,23 @@ try {
 
   // fast-forward to the end of the track: the boss appears and the track stops
   const coinsBefore = (await save()).coins;
-  const atBoss = await page.evaluate(() => { __ER.setBot('smart'); return __ER.sim(95); });
+  const atBoss = await page.evaluate(() => { const s = __ER.scene; __ER.setBot('smart'); s.simulating = true; let t = 0; while (s.mode === 'play' && !s.boss && t < 120) { s.botSteer(1 / 60); s.step(1 / 60); t += 1 / 60; } s.simulating = false; s.setEraVisuals(s.era, true); s.refreshWeaponLook(); return __ER.state(); });
   check('boss appears at the end of the track', !!atBoss.boss, atBoss.boss ? `${atBoss.boss.name}, ${atBoss.boss.maxHp} HP` : `mode ${atBoss.mode}`);
-  const d0 = atBoss.d;
+  const d0 = (await page.evaluate(() => __ER.sim(1.2))).d;
   const mid = await page.evaluate(() => __ER.sim(3));
   check('track stops during the boss fight', mid.d - d0 < 40, `moved ${(mid.d - d0).toFixed(0)}`);
-  check('coins were collected on the way', mid.coins > 50, `${mid.coins} coins`);
-  const end = await page.evaluate(() => __ER.sim(60));
+  check('coins were collected on the way', mid.coins > 30, `${mid.coins} coins`);
+  // boss down -> the BONUS RUN: multiplier rows across the track, the track moves again
+  const bon = await page.evaluate(() => { const s = __ER.scene; s.simulating = true; let t = 0; while (s.mode === 'play' && !s.bonus && t < 60) { s.botSteer(1 / 60); s.step(1 / 60); t += 1 / 60; } s.simulating = false; const st = __ER.state(); const d0 = s.d; __ER.sim(1); return { st, moved: s.d - d0 }; });
+  const rows = bon.st.bonus?.rows || [];
+  check('a bonus run starts after the boss is beaten', bon.st.mode === 'play' && !!bon.st.bonus && !bon.st.boss, `mode ${bon.st.mode}`);
+  check('bonus rows are tagged x1.2 ... x5 and get tougher', rows.map((r) => r.mult).join(',') === '1.2,1.5,2,2.5,3,4,5' && rows.every((r, i) => !i || r.maxHp > rows[i - 1].maxHp * 1.3), rows.map((r) => `x${r.mult}:${r.maxHp}`).join(' '));
+  check('the track runs again during the bonus', bon.moved > 300, `moved ${bon.moved.toFixed(0)}`);
+  const end = await page.evaluate(() => __ER.sim(12));
+  const res = await page.evaluate(() => __ER.scene.lastResult);
+  check('bonus run is short (<= 8.5 s)', res.bonusTime > 2 && res.bonusTime <= 8.5, `${res.bonusTime.toFixed(1)}s, ${res.bonusRows} rows broken`);
+  check('the bonus multiplier multiplies the level coins', res.bonusMult > 1 && res.coins === Math.round(res.coinsRaw * res.bonusMult), `${res.coinsRaw} x${res.bonusMult} = ${res.coins}`);
+  check('the best bonus multiplier is saved for the level', (await save()).bonusBest?.['1'] === res.bonusMult, JSON.stringify((await save()).bonusBest));
   check('beating the boss wins the level', end.mode === 'won', `mode=${end.mode} era=${end.eraName} boss fight ${end.boss?.t.toFixed(1)}s`);
   check('Level 1 is the Stone Age with the Woolly Mammoth', end.level === 1 && end.era === 0 && atBoss.boss?.name === 'WOOLLY MAMMOTH');
   await sleep(600);
@@ -121,6 +131,45 @@ try {
   await page.evaluate(() => { __ER.setBot(null); const s = __ER.scene; s.finishRun(false); });
   await sleep(300); await tap('play');
   check('tapping RETRY while the coin counter runs starts a new run', (await state()).mode === 'play');
+
+  // the BEST marker: survives a reload and shows on that level's row in the next bonus run
+  const bestM = await page.evaluate(() => {
+    const E = __ER, s = E.scene; E.save.reload();
+    const best = E.save.data.bonusBest['1'];
+    E.jumpToBoss(0, { rate: 0, dmg: 0, extra: 0 }, 0, 1); E.setBot(null); E.sim(4);
+    s.boss.hp = 1; s.boss.shields = []; s.boss.shieldUntil = 0; s.bossHit({ dmg: 5, noFx: true }); E.sim(2.2);
+    const row = s.bonus?.rows.find((r) => r.bestT);
+    const out = { best, mult: row?.mult, text: row?.bestT?.text, n: s.bonus?.rows.filter((r) => r.bestT).length };
+    // a weak weapon breaks nothing -> no multiplier, best stays
+    E.sim(12); out.weak = s.lastResult.bonusMult; out.after = E.save.data.bonusBest['1']; out.coins = [s.lastResult.coinsRaw, s.lastResult.coins];
+    return out;
+  });
+  check('BEST marker persists and sits on the best row', bestM.best > 1 && bestM.mult === bestM.best && bestM.n === 1 && /^BEST: x/.test(bestM.text || ''), JSON.stringify(bestM));
+  check('a worse bonus keeps the saved best', bestM.after === bestM.best && bestM.weak < bestM.best && bestM.coins[1] === Math.round(bestM.coins[0] * bestM.weak), JSON.stringify(bestM));
+  // a lost run gets no bonus
+  const lostB = await page.evaluate(() => { const s = __ER.scene; s.closeScreen(); s.mode = 'won'; s.startRun(1); __ER.setBot(null); s.hp = 1; const st = __ER.sim(60); return { mode: st.mode, bonus: s.lastResult.bonusMult }; });
+  check('no bonus run on a loss', lostB.mode === 'lost' && !lostB.bonus, JSON.stringify(lostB));
+
+  // YEAR COUNTER: shown on the HUD, climbs with XP inside the era's range, weapon 2 at a fitting year
+  const yr = await page.evaluate(() => {
+    const E = __ER, s = E.scene; s.closeScreen(); s.mode = 'won'; s.startRun(1); E.setBot(null);
+    s.objs.forEach((o) => { o.dead = true; }); s.qi = s.level.items.length;
+    const out = { start: s.yearText.text, visible: s.yearText.visible && s.hud.visible };
+    const p0 = s.stats.yrsPops || 0;
+    for (let i = 0; i < 12; i++) { s.collectGem({ xp: 1, x: 0, z: 0 }); s.step(1 / 60); } s.render();
+    out.mid = s.yearText.text; out.y1 = s.year; out.pops = (s.stats.yrsPops || 0) - p0; out.popTexts = s.yrsPops.length;
+    s.xp = 0; s.gainXp(s.level.need[0]); s.step(1 / 60); s.render(); out.unlock = s.yearText.text; out.tier = s.tier;
+    s.gainXp(999); s.step(1 / 60); s.render(); out.end = s.yearText.text;
+    s.closeScreen(); s.mode = 'won'; s.startRun(3); s.render(); out.l3 = s.yearText.text;
+    s.closeScreen(); s.mode = 'won'; s.startRun(4); s.render(); out.l4 = s.yearText.text;
+    s.closeScreen(); s.mode = 'won'; s.startRun(7); s.render(); out.l7 = s.yearText.text; out.loop = s.loopTag.text;
+    s.closeScreen(); s.mode = 'won'; s.startRun(1); s.render(); out.loop1 = s.loopTag.text;
+    return out;
+  });
+  check('HUD year counter starts at 10,000 BC in the Stone Age', yr.start === '10,000 BC' && yr.visible, JSON.stringify(yr));
+  check('the year climbs as gems are grabbed, with aggregated +YRS popups', yr.y1 > -10000 && /BC$/.test(yr.mid) && yr.pops >= 1 && yr.pops <= 2 && yr.popTexts >= 1, `${yr.mid}, ${yr.pops} popup(s) for 12 gems`);
+  check('weapon 2 arrives partway through the era; the era ends at 3,000 BC', yr.tier === 1 && yr.unlock === '7,000 BC' && yr.end === '3,000 BC', `${yr.unlock} -> ${yr.end}`);
+  check('other eras use their own ranges (500 AD, 1450 AD); Level 7 loops with a LOOP 2 tag', yr.l3 === '500 AD' && yr.l4 === '1450 AD' && yr.l7 === '10,000 BC' && yr.loop === 'LOOP 2' && yr.loop1 === '', JSON.stringify(yr));
 
   // weapon tiers: each level starts on its era's weapon 1, XP earns weapon 2 (and no further)
   const tiers = await page.evaluate(() => {
@@ -245,7 +294,7 @@ try {
   await page.evaluate(() => { const s = __ER.scene; s.mode = 'won'; s.showTitle(); });
   await sleep(500);
   await tap('settings');
-  if (!(await ui('reset'))) { console.log('  (settings tap missed, retrying)', JSON.stringify(await state()).slice(0, 120)); await tap('settings'); } await tap('reset'); await tap('resetYes');
+  if (!(await ui('reset'))) { console.log('  (settings tap missed, retrying)', JSON.stringify(await state()).slice(0, 120)); await tap('settings'); } await tap('reset'); if (!(await ui('resetYes'))) { console.log('  (reset tap missed, retrying)'); await sleep(300); await tap('reset'); } await tap('resetYes');
   sv = await save();
   check('confirmed reset wipes coins and upgrades', sv.coins === 0 && sv.upg.dmg === 0 && sv.music === false);
   await sleep(300);

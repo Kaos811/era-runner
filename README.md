@@ -128,3 +128,21 @@ Code layout: `src/eras.js` (era stats and colours), `src/level.js` (level layout
 - Tuning knobs: `src/tuning.js` (`GEMS`, `CRATES`), `src/powerups.js` (`RARITIES`, `POWERUPS`),
   `src/level.js` (`SEG_ROWS`, `CRATE_AT`, `ARCH_AT`), `src/bosses.js` (`REF_BOOST`, per-boss hp).
 - Tests: `node tests/e2e.mjs`, screenshots `node tests/screens-stage5.mjs`, bot tuning `node tests/tune4.mjs`.
+
+## Stage 6 — Bonus run and year counter
+
+- **Bonus run** (wins only): after the boss falls, ~5–8 s of rows of numbered blocks spanning the
+  track, tagged x1.2, x1.5, x2, x2.5, x3, x4, x5. Row HP climbs steeply from the level's base weapon
+  DPS, so how far you get depends on your real firepower (gates, weapon 2, power-ups, shop upgrades).
+  The first row you can't break (a harmless bump) or clearing x5 ends it; the level's coins are
+  multiplied by the best row broken, with a count-up and an "x2.5!" stamp on the result screen.
+  The best multiplier per level is saved (`bonusBest` in the save) and shown on the track as
+  "BEST: x3" on that row. Base coin values were scaled to 0.62 so the multiplier doesn't flood the shop.
+  Knobs: `BONUS` and `COINS` in `src/tuning.js`; code in `src/bonus.js`.
+- **Year counter**: the HUD shows a year next to the weapon name (and under the weapon) that climbs
+  with XP through the level's era (Stone 10,000 BC–3,000 BC, Bronze 3,000–800 BC, Medieval
+  500–1450 AD, Gunpowder 1450–1850 AD, Modern 1900–2025 AD, Future 2100–2400 AD). Weapon 2 arrives
+  at a fitting year (7,000 BC, 1,800 BC, 1100, 1650, 1960, 2250 AD). Gem pickups pop "+N YRS"
+  (aggregated every 0.5 s). Level 7+ reuses the ranges with a "LOOP 2" tag. Code: `src/years.js`.
+- Tests: `node tests/e2e.mjs`; bonus/economy tuning `node tests/tune-bonus.mjs`;
+  screenshots `node tests/screens-bonus.mjs`.

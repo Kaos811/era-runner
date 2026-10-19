@@ -25,3 +25,21 @@ export const CRATES = {
   weaveAmp: 140,     // trail weaves left/right this far ...
   weavePeriod: 22,   // ... over this many gems
 };
+
+// Bonus run after a boss win: rows of numbered blocks spanning the track, each tagged with a coin
+// multiplier. Break a row before you reach it to bank its multiplier; the first row you can't
+// break (you just bump into it, no damage) or clearing the last row ends the bonus.
+// Row i HP = ref * hpBase * hpGrowth^i, where ref = the level's base weapon DPS (weapon 1, no
+// boosts) so your real firepower (gates, weapon 2, power-ups, shop upgrades) decides how far you get.
+export const BONUS = {
+  mults: [1.2, 1.5, 2, 2.5, 3, 4, 5],
+  speed: 560,        // track speed during the bonus (units / s)
+  firstZ: 1000,      // first row this far ahead when the bonus starts
+  spacing: 540,      // track distance between rows (~1 s apart)
+  hpBase: 11.5,
+  hpGrowth: 1.6,
+  maxTime: 8.5,      // hard cap; a full clear takes ~7.5 s
+  endDelay: 0.9,     // beat after the bump / last row before the result screen
+};
+// Base coin values are scaled so the bonus multiplier doesn't flood the shop (see README).
+export const COINS = { scale: 0.62 };

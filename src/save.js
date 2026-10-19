@@ -10,6 +10,7 @@ const fresh = () => ({
   level: 1, // highest unlocked level
   upg: { dmg: 0, rate: 0, hp: 0, xp: 0, coin: 0 },
   best: { era: -1, tier: -1, level: 0, wins: 0, runs: 0, bestCoins: 0, bossKills: [0, 0, 0, 0, 0, 0] },
+  bonusBest: {}, // best bonus-run multiplier per level number
   music: true,
   sfx: true,
 });
@@ -32,6 +33,7 @@ function read() {
       (b.bossKills || []).forEach((k, e) => { if (k > 0) { lv = Math.max(lv, e + 2); b.level = Math.max(b.level || 0, e + 1); } });
       d.level = Math.min(7, Math.max(1, lv));
     }
+    if (!d.bonusBest || typeof d.bonusBest !== 'object') d.bonusBest = {};
     d.v = VERSION;
     d.level = Math.max(1, Math.floor(Number(d.level) || 1));
     d.coins = Math.max(0, Math.floor(Number(d.coins) || 0));

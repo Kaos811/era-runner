@@ -74,7 +74,7 @@ export const BossMethods = {
       o.z = Math.max(BOSS_HOME_Z, o.z - 650 * dt);
       if (o.z <= BOSS_HOME_Z) { b.phase = 'fight'; b.nextAt = b.t + 0.9; }
     } else if (b.phase === 'dead') {
-      if (b.t >= b.winAt) { this.win(); return; }
+      if (b.t >= b.winAt) { this.startBonus(); return; }
     } else {
       // gentle sway so the boss isn't always dead centre
       if (!b.charge) o.x += (Math.sin(b.t * 0.75) * 75 - o.x) * Math.min(1, dt * 2.5);

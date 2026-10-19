@@ -6,6 +6,7 @@ import { UPGRADES, upgCost } from './upgrades.js';
 import { Save } from './save.js';
 import { Sound } from './audio.js';
 import { style, col, makeBtn } from './ui.js';
+import { fmtMult } from './bonus.js';
 
 const W = 540, H = 960;
 const fmt = (n) => Math.floor(n).toLocaleString('en-US');
@@ -198,6 +199,7 @@ export const ScreenMethods = {
 
   // ------------------------------------------------------------ end of run
   showEnd(r) {
+    const bm = r.bonusMult || 0;
     this.mode = r.won ? 'won' : 'lost';
     this.lastResult = r;
     this.hud.setVisible(true);
@@ -233,14 +235,29 @@ export const ScreenMethods = {
     c.add(this.add.image(-160, 486, 'coin').setScale(1.15));
     const coinT = this.add.text(-110, 474, '+0', style(40, '#ffe14d', 7)).setOrigin(0, 0.5);
     c.add(coinT);
-    c.add(this.add.text(-110, 510, r.won ? 'coins earned' : `coins kept (half of ${r.coinsRaw})`, style(15, '#d0d0d0', 0)).setOrigin(0, 0.5));
+    c.add(this.add.text(-110, 510, r.won ? (bm > 0 ? `coins earned (${fmt(r.coinsRaw)} x ${String(bm)} bonus)` : 'coins earned') : `coins kept (half of ${r.coinsRaw})`, style(15, '#d0d0d0', 0)).setOrigin(0, 0.5));
     c.add(this.add.text(200, 474, `TOTAL\n${fmt(Save.data.coins)}`, style(16, '#ffffff', 3, { align: 'right' })).setOrigin(1, 0.5));
-    this.screenTweens.push(this.tweens.addCounter({ from: 0, to: r.coins, duration: 900, delay: 250, onUpdate: (tw) => { if (coinT.active) coinT.setText('+' + fmt(tw.getValue())); } }));
+    if (bm > 0) {
+      // count up the level's coins, stamp the bonus multiplier, then count up to the total
+      const base = r.coinsRaw;
+      const multT = this.add.text(78, 470, fmtMult(bm) + '!', style(38, '#ffc21a', 8)).setOrigin(0.5).setAlpha(0).setAngle(-10);
+      c.add(multT);
+      this.screenTweens.push(this.tweens.addCounter({ from: 0, to: base, duration: 600, delay: 250, onUpdate: (tw) => { if (coinT.active) coinT.setText('+' + fmt(tw.getValue())); },
+        onComplete: () => {
+          if (!multT.active) return;
+          multT.setAlpha(1).setScale(2.4);
+          Sound.play('bandup', 4);
+          this.tweens.add({ targets: multT, scale: 1, duration: 260, ease: 'Back.easeOut' });
+          this.screenTweens.push(this.tweens.addCounter({ from: base, to: r.coins, duration: 900, delay: 280, ease: 'Cubic.easeOut',
+            onUpdate: (tw) => { if (coinT.active) { coinT.setText('+' + fmt(tw.getValue())); } },
+            onComplete: () => { if (coinT.active) { Sound.play('coin'); this.tweens.add({ targets: coinT, scale: { from: 1.25, to: 1 }, duration: 200 }); } } }));
+        } }));
+    } else this.screenTweens.push(this.tweens.addCounter({ from: 0, to: r.coins, duration: 900, delay: 250, onUpdate: (tw) => { if (coinT.active) coinT.setText('+' + fmt(tw.getValue())); } }));
     const lines = [
       ['Enemies defeated', r.kills],
       ['Power-ups', (r.powerups || []).reduce((a, [, n]) => a + n, 0)],
       [r.won ? 'Boss fight' : 'Distance', r.won ? `${r.bossTime.toFixed(1)}s` : `${r.pct}%`],
-      ['Run time', `${r.time.toFixed(1)}s`],
+      bm > 0 ? ['Bonus run', `${fmtMult(bm)}${r.bonusNewBest ? '  NEW BEST!' : `  (best ${fmtMult(r.bonusBest)})`}`] : ['Run time', `${r.time.toFixed(1)}s`],
     ];
     lines.forEach(([k, v], i) => {
       c.add(this.add.text(-195, 565 + i * 31, k, style(19, '#d0d0d0', 0)).setOrigin(0, 0.5));

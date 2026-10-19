@@ -3,7 +3,9 @@ import { ERAS, WEAPONS, MAX_TIER, tierDps } from '../eras.js';
 import { buildLevel, levelInfo } from '../level.js';
 import { CheckpointMethods } from '../checkpoint.js';
 import { POWERUPS, payout, LAP } from '../powerups.js';
-import { GEMS, CRATES } from '../tuning.js';
+import { GEMS, CRATES, BONUS, COINS } from '../tuning.js';
+import { BonusMethods } from '../bonus.js';
+import { YearMethods } from '../years.js';
 import { CrateMethods } from '../crates.js';
 import { Save } from '../save.js';
 import { runMods, UPGRADES, upgCost } from '../upgrades.js';
@@ -112,7 +114,9 @@ export class GameScene extends Phaser.Scene {
     this.mods = runMods(this.testUpg || Save.data.upg);
     this.maxHp = this.mods.maxHp; this.hp = this.maxHp;
     this.tier = this.info.era * 2; this.xp = 0;
-    this.runSpeed = RUN; this.runCoins = 0;
+    this.runSpeed = RUN; this.runCoins = 0; this.coinAcc = 0;
+    this.bonus = null; this.bossDone = null; this.bonusNewBest = false;
+    this.bonusLabel?.setVisible(false);
     if (this.boss) { this.bprojs?.forEach((p) => p.img?.destroy()); }
     this.boss = null; this.bossWarns = []; this.bprojs = [];
     this.showBossBar?.(false);
@@ -126,6 +130,7 @@ export class GameScene extends Phaser.Scene {
     this.setEraVisuals(this.info.era, true);
     this.weaponImg.setTexture('weapon_' + this.weapon.key);
     this.refreshWeaponLook?.();
+    this.resetYears();
     this.updateHud(true);
   }
 
@@ -176,13 +181,13 @@ export class GameScene extends Phaser.Scene {
   step(dt) {
     this.time += dt;
     // the track stops for the boss fight
-    this.runSpeed = this.boss ? Math.max(0, this.runSpeed - 450 * dt) : RUN;
+    this.runSpeed = this.bonus ? (this.bonus.over ? 0 : BONUS.speed) : this.boss ? Math.max(0, this.runSpeed - 450 * dt) : RUN;
     this.d += this.runSpeed * dt;
     const L = this.level;
 
     // spawn
     while (this.qi < L.items.length && L.items[this.qi].at - this.d < SPAWN_Z) this.spawn(L.items[this.qi++]);
-    if (!this.boss && this.d >= L.finish - 120) this.startBoss();
+    if (!this.boss && !this.bonus && this.d >= L.finish - 120) this.startBoss();
 
     // player steering (smoothed)
     this.px += (this.tx - this.px) * Math.min(1, dt * 14);
@@ -202,12 +207,15 @@ export class GameScene extends Phaser.Scene {
 
     // fire
     this.fireT -= dt;
-    while (this.fireT <= 0) { this.fire(); this.fireT += 1 / this.rate; }
+    if (this.bonus?.over) this.fireT = Math.max(this.fireT, 0.05);
+    else while (this.fireT <= 0) { this.fire(); this.fireT += 1 / this.rate; }
     this.stepPowers(dt);
 
     this.stepGems(dt);
     this.stepPops(dt);
+    this.stepYears(dt);
     if (this.boss) { this.bossStep(dt); if (this.mode !== 'play') return; }
+    if (this.bonus) { this.bonusStep(dt); if (this.mode !== 'play') return; }
 
     // projectiles
     for (const p of this.projs) {
@@ -224,7 +232,7 @@ export class GameScene extends Phaser.Scene {
       p.z = nz;
       if (best) {
         this.hit(best, p);
-        if (p.pierce > 0 && (best.type === 'enemy' || best.type === 'block' || best.type === 'crate')) { p.pierce--; (p.hitSet ||= new Set()).add(best); }
+        if (p.pierce > 0 && (best.type === 'enemy' || best.type === 'block' || best.type === 'crate' || best.type === 'brow')) { p.pierce--; (p.hitSet ||= new Set()).add(best); }
         else p.dead = true;
       }
       else if (p.z > RANGE) p.dead = true;
@@ -302,6 +310,7 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     if (o.type === 'crate') { this.hitCrate(o, p); return; }
+    if (o.type === 'brow') { this.hitRow(o, p); return; }
     const dealt = Math.min(p.dmg, o.hp);
     o.hp -= p.dmg;
     this.stats.damage += dealt;
@@ -396,7 +405,7 @@ export class GameScene extends Phaser.Scene {
 
   gainXp(v) {
     this.xp += v;
-    if (this.boss) return; // the weapon is locked in once the boss fight starts
+    if (this.boss || this.bonus) return; // the weapon is locked in once the boss fight starts
     const need = this.level.need;
     while (this.tier < this.maxTier && this.xp >= need[0]) {
       this.xp -= need[0];
@@ -544,6 +553,16 @@ export class GameScene extends Phaser.Scene {
         o.img.y = -Math.abs(Math.sin(this.time * 3)) * 4;
       }
       if (o.type === 'gate') { o.value.setScale(Math.max(1, 0.3 / pr.s) * (o.pop || 1)); o.label.setScale(Math.max(1, 0.36 / pr.s)); }
+      if (o.type === 'brow') {
+        // only the next two rows show their numbers, so far rows don't pile up into a jumble
+        const ahead = this.bonus ? this.bonus.rows.filter((r) => !r.dead && !r.used && r.z < o.z).length : 0;
+        const ta = ahead < 2 ? 1 : 0;
+        o.tag.list.forEach((t) => t.setScale(Math.max(1, 0.3 / pr.s))); o.tag.setAlpha(ta); o.hpText.setAlpha(ta).setScale(Math.max(1, 0.3 / pr.s));
+        o.bestT?.setScale(Math.max(1, 0.34 / pr.s));
+        o.c.setAlpha(o.z > 1500 ? Phaser.Math.Clamp((SPAWN_Z + 300 - o.z) / 500, 0, 1) : 1);
+        for (const im of o.imgs) { if (o.flash > 0) im.setTintFill(0xffffff); else im.setTint(o.tint); }
+        continue;
+      }
       const fade = o.z > 1500 ? Phaser.Math.Clamp((SPAWN_Z - o.z) / 400, 0, 1) : 1;
       o.c.setAlpha(fade);
       if (o.img && o.type !== 'gate' && o.type !== 'checkpoint') {
@@ -745,6 +764,7 @@ export class GameScene extends Phaser.Scene {
     this.meterText = wrap(this.add.text(518, 151, '', style(13, '#ffffff', 4)).setOrigin(1, 0.5));
     this.puIcons = wrap(this.add.container(0, 208));
     this.hurtFlash = this.add.rectangle(0, 0, W, H, 0xff0000, 0).setOrigin(0).setDepth(D0 - 10);
+    this.createYearHud();
     this.hudDirty = true;
   }
 
@@ -793,6 +813,7 @@ export class GameScene extends Phaser.Scene {
     }
     const st = `DMG ${this.dmg.toFixed(1)}\nRATE ${this.rate.toFixed(1)}/s\nSHOTS ${this.shots}`;
     if (st !== this.lastSt) { this.lastSt = st; this.statText.setText(st); }
+    this.updateYearHud();
   }
 
   toast(msg, color, y = PY - 150) {
@@ -856,11 +877,15 @@ export class GameScene extends Phaser.Scene {
   }
 
   projectPt(x, z) { return project(x, z); }
-  levelCoins(n) { return Math.max(1, Math.round(n * this.info.coinMul)); }
+  // fractional: coins accumulate in addCoins (COINS.scale trims base values without rounding to 0)
+  levelCoins(n) { return n * this.info.coinMul * COINS.scale; }
 
   addCoins(n, o) {
+    this.coinAcc = (this.coinAcc || 0) + n;
+    n = Math.floor(this.coinAcc + 1e-9);
+    this.coinAcc -= n;
     this.runCoins += n;
-    if (this.simulating || !o) return;
+    if (this.simulating || !o || n <= 0) return;
     const pr = project(o.x, Math.max(o.z, 0));
     const k = Math.min(n, 12);
     for (let i = 0; i < k; i++) {
@@ -886,7 +911,10 @@ export class GameScene extends Phaser.Scene {
   finishRun(won) {
     if (this.mode !== 'play') return;
     const raw = Math.round(this.runCoins * this.mods.coinMul);
-    const coins = won ? raw : Math.ceil(raw / 2);
+    // a won run's coins are multiplied by the best bonus-run row broken
+    const mult = won && this.bonus ? this.bonusMult() : 1;
+    const coins = won ? Math.round(raw * mult) : Math.ceil(raw / 2);
+    const boss = this.boss || this.bossDone;
     const S = Save.data, best = S.best;
     const newBest = this.tier > best.tier;
     S.coins += coins;
@@ -895,7 +923,7 @@ export class GameScene extends Phaser.Scene {
     best.runs++;
     let unlocked = 0;
     if (won) {
-      best.wins++; best.bossKills[this.boss.era]++;
+      best.wins++; best.bossKills[boss.era]++;
       best.level = Math.max(best.level || 0, this.levelN);
       if (this.levelN + 1 > S.level) { S.level = this.levelN + 1; unlocked = S.level; }
       this.selLevel = this.levelN + 1;
@@ -905,7 +933,8 @@ export class GameScene extends Phaser.Scene {
     this.stats.coins = coins;
     const pct = Math.round(Phaser.Math.Clamp(this.d / this.level.finish, 0, 1) * 100);
     this.lastResult = { won, level: this.levelN, unlocked, era: this.era, tier: this.tier, powerups: this.puOrder.map((id) => [id, this.puCount[id]]), coins, coinsRaw: raw, kills: this.stats.kills, blocks: this.stats.blocks, gates: this.stats.gates, hp: this.hp,
-      time: this.time, pct, bossName: this.boss?.def.name, bossTime: this.stats.bossTime || 0, newBest };
+      time: this.time, pct, bossName: boss?.def.name, bossTime: this.stats.bossTime || 0, newBest,
+      bonusMult: won && this.bonus ? mult : 0, bonusRows: this.bonus ? this.bonus.broken + 1 : 0, bonusFire: this.bonus?.fire || 0, bonusTime: this.bonus?.t || 0, bonusBest: this.bonusBest(), bonusNewBest: !!this.bonusNewBest };
     this.mode = won ? 'won' : 'lost';
     this.dragging = false;
     this.bprojs.forEach((p) => p.img?.destroy());
@@ -1025,7 +1054,7 @@ export class GameScene extends Phaser.Scene {
         return { x: r.x + (m.tx - cam.worldView.x) * cam.zoom * k, y: r.y + (m.ty - cam.worldView.y) * cam.zoom * k };
       },
       state: () => ({ mode: s.mode, boss: s.boss ? { name: s.boss.def.name, hp: s.boss.hp, maxHp: s.boss.maxHp, phase: s.boss.phase, t: s.boss.t } : null, coins: s.runCoins, savedCoins: Save.data.coins, maxHp: s.maxHp, level: s.levelN, era: s.era, eraName: ERAS[s.era].name, tier: s.tier, meter: s.meter, band: s.meterBand(), lap: s.meterLap(), powerups: { ...s.puCount }, pu: { ...s.pu }, unlocked: Save.data.level, paused: s.pauseT > 0, weapon: s.weapon.name, need: s.level.need, xp: s.xp, hp: s.hp, d: s.d, finish: s.level.finish, time: s.time,
-        rate: s.rate, dmg: s.dmg, shots: s.shots, stats: { ...s.stats }, eraTimes: [...s.eraTimes], tierTimes: [...s.tierTimes], objs: s.objs.length, projs: s.projs.length }),
+        rate: s.rate, dmg: s.dmg, shots: s.shots, stats: { ...s.stats }, bonus: s.bonus ? { t: s.bonus.t, broken: s.bonus.broken, over: s.bonus.over, mult: s.bonusMult(), rows: s.bonus.rows.map((r) => ({ z: r.z, hp: r.hp, maxHp: r.maxHp, mult: r.mult, dead: !!r.dead })) } : null, bonusBest: s.bonusBest(), year: s.year, yearText: s.yearText?.text, yrsPops: s.stats.yrsPops || 0, eraTimes: [...s.eraTimes], tierTimes: [...s.tierTimes], objs: s.objs.length, projs: s.projs.length }),
       // fast-forward the simulation (headless) with the current bot steering
       sim: (seconds, opts = {}) => {
         const wasPlaying = s.mode === 'play';
@@ -1043,4 +1072,4 @@ export class GameScene extends Phaser.Scene {
   }
 }
 
-Object.assign(GameScene.prototype, BossMethods, ScreenMethods, CheckpointMethods, CrateMethods);
+Object.assign(GameScene.prototype, BossMethods, ScreenMethods, CheckpointMethods, CrateMethods, BonusMethods, YearMethods);
