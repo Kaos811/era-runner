@@ -24,7 +24,7 @@ const shot = async (n) => { await clear(); await page.screenshot({ path: `${OUT}
 const ev = (f, a) => page.evaluate(f, a);
 await shot('50-title-level-select');
 // mid-run HUD with a part-filled meter (smart bot, Level 4)
-await ev(() => { const E = __ER, s = E.scene; s.closeScreen(); s.mode = 'won'; s.startRun(4); E.setBot('smart'); E.sim(22); });
+await ev(() => { const E = __ER, s = E.scene; s.closeScreen(); s.mode = 'won'; s.startRun(4); E.setBot('smart'); E.sim(32); });
 await ev(() => __ER.sim(1.2, { visual: true })); await sleep(900);
 await shot('51-hud-meter-mid-run');
 // common reveal: almost empty meter, run into the gate in real time
@@ -41,10 +41,10 @@ const reveal = async (meter, names) => {
   for (let i = 0; i < 300 && (await ev(() => __ER.state().paused)); i++) await sleep(100);
 };
 await ev(() => { const E = __ER, s = E.scene; s.closeScreen(); s.mode = 'won'; s.startRun(1); E.setBot('smart'); E.sim(5); });
-await reveal(6, ['52-checkpoint-gate-ahead', '53-reveal-common']);
+await reveal(2, ['52-checkpoint-gate-ahead', '53-reveal-common']);
 // legendary loop: meter wrapped once (x2) + some -> Legendary + Rare
 await ev(() => { const E = __ER, s = E.scene; s.closeScreen(); s.mode = 'won'; s.startRun(1); E.setBot('smart'); E.sim(5); });
-await ev(() => { __ER.scene.meter = __ER.LAP + 30; __ER.scene.updateHud(true); });
+await ev(() => { __ER.scene.meter = __ER.LAP + 12; __ER.scene.updateHud(true); });
 await ev(() => { const E = __ER; E.toCheckpoint(0, null, 1300); E.sim(0.6, { visual: true }); }); await sleep(300);
 await shot('54-meter-looped-x2');
 await reveal(null, [null, '55-reveal-legendary-loop', '56-reveal-loop-second-card']);

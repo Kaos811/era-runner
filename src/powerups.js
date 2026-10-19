@@ -1,3 +1,4 @@
+import { GEMS } from './tuning.js';
 // Checkpoint power-ups. Easy to extend: add an entry with an id, rarity, name, short desc, icon
 // (texture drawn in Boot.js -> powerupIcons; any existing 'pu_*' key works) and apply(p), which
 // changes the run's power-up state `p` (see freshPowerState). Power-ups last for the rest of the
@@ -6,11 +7,11 @@
 // Rarity bands of the checkpoint meter. `size` = meter points for that band (later bands take more).
 // One gem = 1 point, plus the "gems in a row" streak bonus (up to +1 per gem).
 export const RARITIES = [
-  { key: 'common', name: 'COMMON', color: 0xd9dde3, text: '#e9edf2', size: 10 },
-  { key: 'uncommon', name: 'UNCOMMON', color: 0x4cd964, text: '#7dff9a', size: 14 },
-  { key: 'rare', name: 'RARE', color: 0x3a8dff, text: '#7ab8ff', size: 21 },
-  { key: 'epic', name: 'EPIC', color: 0xb052ff, text: '#d29bff', size: 27 },
-  { key: 'legendary', name: 'LEGENDARY', color: 0xffc21a, text: '#ffd84d', size: 35 },
+  { key: 'common', name: 'COMMON', color: 0xd9dde3, text: '#e9edf2', size: 4 },
+  { key: 'uncommon', name: 'UNCOMMON', color: 0x4cd964, text: '#7dff9a', size: 5 },
+  { key: 'rare', name: 'RARE', color: 0x3a8dff, text: '#7ab8ff', size: 8 },
+  { key: 'epic', name: 'EPIC', color: 0xb052ff, text: '#d29bff', size: 11 },
+  { key: 'legendary', name: 'LEGENDARY', color: 0xffc21a, text: '#ffd84d', size: 20 },
 ];
 export const LAP = RARITIES.reduce((a, r) => a + r.size, 0); // points for one full lap (= a banked Legendary)
 
@@ -48,7 +49,7 @@ export const POWERUPS = [
   { id: 'power', rarity: 'uncommon', name: 'Power Up', desc: '+22% damage', icon: 'pu_dmg2', apply: (p) => { p.dmgMul *= 1.22; } },
   { id: 'frenzy', rarity: 'uncommon', name: 'Frenzy', desc: '+22% fire rate', icon: 'pu_rate2', apply: (p) => { p.rateMul *= 1.22; } },
   { id: 'extra', rarity: 'uncommon', name: 'Extra Shot', desc: '+1 projectile', icon: 'pu_shot', apply: (p) => { p.shots += 1; } },
-  { id: 'magnet', rarity: 'uncommon', name: 'Gem Magnet', desc: 'Grab gems from farther away', icon: 'pu_magnet', apply: (p) => { p.magnet += 0.7; } },
+  { id: 'magnet', rarity: 'uncommon', name: 'Gem Magnet', desc: 'Grab gems from farther away', icon: 'pu_magnet', apply: (p) => { p.magnet += GEMS.magnetStep; } },
   // ---- rare
   { id: 'pierce', rarity: 'rare', name: 'Piercing', desc: 'Shots go through 1 more enemy', icon: 'pu_pierce', apply: (p) => { p.pierce += 1; } },
   { id: 'shield', rarity: 'rare', name: 'Bubble Shield', desc: 'Blocks a hit, recharges in 8s', icon: 'pu_shield', apply: (p) => { p.shieldMax += 1; p.shield = p.shieldMax; } },

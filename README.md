@@ -60,7 +60,7 @@ its value. Health does not regenerate, so steering matters.
   coins, upgrades and settings; an old save unlocks the level of the best era it reached (or the one after a beaten boss).
 - **Checkpoint power-ups.** XP gems also fill a CHECKPOINT meter with five rarity bands (Common grey, Uncommon green,
   Rare blue, Epic purple, Legendary gold; later bands need more gems; the gem streak multiplies meter points too).
-  A CHECKPOINT arch crosses the track at ~47% and again just before the boss: the meter cashes out into a random
+  A CHECKPOINT arch crosses the track at ~30%, ~60% and just before the boss (the meter resets after each): the meter cashes out into a random
   power-up from the highest band reached, shown with a colour-coded card flip and sound. Filling Legendary wraps
   the meter back to Common (x2, x3 on the HUD); every full lap banks one Legendary, so a great run can earn several
   power-ups at one checkpoint. Power-ups last the rest of the level, stack, work on the boss, and show as HUD icons.
@@ -73,6 +73,13 @@ its value. Health does not regenerate, so steering matters.
 - Gates halved (5 per level). Head Start upgrade now gives a % of the XP to weapon 2.
 - Balance: `node tests/tune4.mjs` runs fresh-save campaigns per bot (buys upgrades as it goes) and prints per-level
   win rate, upgrades, coins, fight length and checkpoint rarity / loop stats. Screenshots: `node tests/screens-stage4.mjs`.
+
+## Stage 4.1 tuning
+- Gems pop 42-78 units sideways, away from you, and the pickup reach is narrower: you have to steer for them
+  (standing still collects nothing). One gem per enemy (2 for big ones and blocks). Gem Magnet doubles the reach per stack.
+- Weapon 2 needs 25% of the level's enemy HP in gem XP. Rarity bands are 4 / 5 / 8 / 11 / 20 points (a lap is 48).
+- 3 checkpoints per level. All gem and checkpoint knobs are in `src/tuning.js`, `src/powerups.js` (bands and
+  power-up pool) and the `PLAN` rows in `src/level.js` (add or remove `'cp'` rows to change the number of checkpoints).
 
 ## Credits and licenses
 All art and audio are original and generated in code. There are **no third-party asset files**.

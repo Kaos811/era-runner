@@ -3,6 +3,7 @@ import { ERAS, WEAPONS, MAX_TIER, tierDps } from '../eras.js';
 import { buildLevel, levelInfo } from '../level.js';
 import { CheckpointMethods } from '../checkpoint.js';
 import { POWERUPS, payout, LAP } from '../powerups.js';
+import { GEMS } from '../tuning.js';
 import { Save } from '../save.js';
 import { runMods, UPGRADES, upgCost } from '../upgrades.js';
 import { Sound } from '../audio.js';
@@ -15,8 +16,7 @@ const W = 540, H = 960, CX = 270;
 const HY = 300;          // horizon line (screen y at infinite distance)
 const PY = 830;          // screen y of the ground under the player
 // XP gems are picked up when they pass within GEM_REACH_X of the weapon (lanes are 150 apart)
-const COMBO_GAIN = 0.05, COMBO_MISS = 0.3;
-const GEM_REACH_X = 62, GEM_REACH_Z = 150, GEM_SPREAD = 40, HOMING = 18;
+const { comboGain: COMBO_GAIN, comboMiss: COMBO_MISS, reachX: GEM_REACH_X, reachZ: GEM_REACH_Z, spread: GEM_SPREAD, homing: HOMING } = GEMS;
 const D = 380;           // camera distance: scale = D / (D + z)
 const HALF = 235;        // half track width at the player
 const FAR = 6000;        // how far the track is drawn
@@ -324,10 +324,14 @@ export class GameScene extends Phaser.Scene {
   // XP gems drop where an enemy/block dies and lie on the track: steer within reach to pick them up.
   // XP is the target's full (nominal) HP, split over its gems; gems you miss are lost.
   dropGems(o) {
-    const n = o.type === 'block' ? 3 : 1 + Math.floor(o.size);
+    const n = o.type === 'block' ? GEMS.perKill.block : o.size > 1.3 ? GEMS.perKill.big : GEMS.perKill.enemy;
     const xp = (o.xpVal ?? o.maxHp) / n;
     for (let i = 0; i < n; i++) {
-      this.gems.push({ x: Phaser.Math.Clamp(o.x + (i - (n - 1) / 2) * GEM_SPREAD + (Math.random() - 0.5) * GEM_SPREAD, -MAX_X, MAX_X), z: Math.max(o.z, 60) + i * 14, xp, pull: false, img: null, t: Math.random() * 6 });
+      // pop away from where you are, so a gem always takes a bit of steering to grab
+      let side = Math.sign(o.x - this.px) || (Math.random() < 0.5 ? -1 : 1);
+      if (Math.abs(o.x + side * GEMS.pop[0]) > MAX_X - 10) side = -side; // no room at the edge: pop back across
+      const pop = side * (GEMS.pop[0] + Math.random() * (GEMS.pop[1] - GEMS.pop[0]) + i * GEM_SPREAD);
+      this.gems.push({ x: Phaser.Math.Clamp(o.x + pop, -MAX_X, MAX_X), z: Math.max(o.z, 60) + i * 14, xp, pull: false, img: null, t: Math.random() * 6 });
     }
   }
 

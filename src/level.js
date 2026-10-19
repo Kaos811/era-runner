@@ -1,12 +1,12 @@
 import { ERAS, tierDps } from './eras.js';
+import { GEMS } from './tuning.js';
 
 // One level = one era. Level 1 Stone Age ... Level 6 Future, then Level 7+ loops back to the
 // Stone Age with tougher enemies and bosses (no cap). The player starts on the era's first weapon
-// and can earn the second one with XP. Halfway and right before the boss there is a CHECKPOINT
+// and can earn the second one with XP. At ~30%, ~60% and right before the boss there is a CHECKPOINT
 // gate that cashes in the gem meter for power-ups (see powerups.js / checkpoint.js).
 export const START = 700;
 export const LEN = 21000;          // ~64 s of running at 330 units/s, plus the boss
-export const CHECKPOINT_AT = 0.47; // first checkpoint, as a share of the track
 
 export function levelInfo(n) {
   n = Math.max(1, Math.floor(n));
@@ -17,7 +17,7 @@ export function levelInfo(n) {
     name: ERAS[era].name,
     hpMul: Math.pow(1.7, loop),          // enemy HP
     dmgMul: 1 + 0.35 * loop,             // enemy / boss damage
-    bossMul: Math.pow(1.45, loop),       // boss HP
+    bossMul: Math.pow(1.4, loop),        // boss HP
     coinMul: 1 + 0.4 * (n - 1),          // coins scale with the level so the shop keeps pace
   };
 }
@@ -33,19 +33,21 @@ function rng(seed) {
   };
 }
 
-// Row recipes for the two halves of a level ('cp' = checkpoint gate with breathing room around it).
-// Rows get track space in proportion to how much they throw at the player (ROW_WEIGHT).
+// Row recipes for the three stretches of a level; 'cp' = checkpoint gate (with breathing room
+// around it) at roughly 30% and 60%, 'cpBoss' right before the boss. To change how many checkpoints
+// there are, just add/remove 'cp' rows. Rows get track space in proportion to ROW_WEIGHT.
 const PLAN = [
-  'e1', 'e1', 'e2', 'gate', 'e2', 'b1', 'e3', 'e2', 'swarm', 'gate', 'e3', 'big', 'e2', 'b2', 'e3', 'swarm', 'e2', 'e3', 'cp',
-  'e2', 'gate', 'e3', 'big', 'swarm', 'b2', 'e3', 'e2', 'gate', 'big', 'swarm', 'e3', 'b2', 'e3', 'gate', 'big', 'swarm', 'e3', 'big', 'cp2',
+  'e1', 'e1', 'e2', 'gate', 'e2', 'b1', 'e3', 'e2', 'swarm', 'e3', 'big', 'e2', 'cp',
+  'e2', 'gate', 'e3', 'b2', 'e3', 'swarm', 'e2', 'big', 'gate', 'e3', 'swarm', 'cp',
+  'b2', 'e2', 'gate', 'e3', 'big', 'swarm', 'e3', 'b2', 'gate', 'big', 'swarm', 'e3', 'big', 'cpBoss',
 ];
-const ROW_WEIGHT = { e1: 0.8, e2: 0.95, e3: 1.15, swarm: 1.35, big: 1.15, b1: 0.85, b2: 1.0, gate: 1.05, cp: 1.6, cp2: 1.3 };
+const ROW_WEIGHT = { e1: 0.8, e2: 0.95, e3: 1.15, swarm: 1.35, big: 1.15, b1: 0.85, b2: 1.0, gate: 1.05, cp: 1.3, cpBoss: 1.3 };
 
 // Enemy HP over the course of a level, relative to the era's first weapon: grows with the
 // gates and power-ups a decent player picks up on the way.
 export const RAMP = [1.0, 3.2];
 export const rampAt = (p) => RAMP[0] + (RAMP[1] - RAMP[0]) * Math.pow(Math.min(1, Math.max(0, p)), 1.1);
-export const XP_SHARE = 0.4; // XP for the era's second weapon, as a share of the level's total enemy HP
+export const XP_SHARE = GEMS.xpShare;
 
 const GOOD = {
   rate: (r) => 15 + Math.round(r() * 3) * 5, // 15..30
@@ -120,7 +122,7 @@ export function buildLevel(n = 1) {
         break;
       }
       case 'gate': items.push({ type: 'gate', at, gates: gatePair(r, gateIdx++), section }); break;
-      case 'cp': case 'cp2': {
+      case 'cp': case 'cpBoss': {
         const cp = { type: 'checkpoint', at, idx: checkpoints.length };
         checkpoints.push(at);
         items.push(cp);

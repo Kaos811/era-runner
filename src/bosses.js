@@ -11,11 +11,11 @@ import { Sound } from './audio.js';
 // Every boss also raises a shield (immune to damage) at 2/3 and 1/3 health.
 export const BOSSES = [
   { name: 'WOOLLY MAMMOTH', tex: 'boss_stone', hp: 1.15, proj: 'bp_rock', attacks: ['volley', 'charge', 'volley', 'volley2'], coins: 20 },
-  { name: 'CHARIOT CHAMPION', tex: 'boss_bronze', hp: 1.2, proj: 'bp_spear', attacks: ['charge', 'volley2', 'volley', 'charge'], coins: 30 },
-  { name: 'CASTLE DRAGON', tex: 'boss_medieval', hp: 0.9, proj: 'bp_fire', attacks: ['beam', 'volley', 'barrage', 'volley2'], beam: 0xff7a1f, coins: 40 },
-  { name: 'PIRATE GALLEON', tex: 'boss_gunpowder', hp: 1.0, proj: 'bp_ball', attacks: ['volley2', 'barrage', 'volley', 'volley2'], coins: 55 },
-  { name: 'IRON TANK', tex: 'boss_modern', hp: 1.15, proj: 'bp_shell', attacks: ['barrage', 'charge', 'volley2', 'volley'], coins: 70 },
-  { name: 'MEGA ROBOT', tex: 'boss_future', hp: 1.25, proj: 'bp_plasma', attacks: ['beam', 'barrage', 'volley2', 'charge'], beam: 0x29f0ff, coins: 90 },
+  { name: 'CHARIOT CHAMPION', tex: 'boss_bronze', hp: 1.05, proj: 'bp_spear', attacks: ['charge', 'volley2', 'volley', 'charge'], coins: 30 },
+  { name: 'CASTLE DRAGON', tex: 'boss_medieval', hp: 0.85, proj: 'bp_fire', attacks: ['beam', 'volley', 'barrage', 'volley2'], beam: 0xff7a1f, coins: 40 },
+  { name: 'PIRATE GALLEON', tex: 'boss_gunpowder', hp: 1.12, proj: 'bp_ball', attacks: ['volley2', 'barrage', 'volley', 'volley2'], coins: 55 },
+  { name: 'IRON TANK', tex: 'boss_modern', hp: 1.05, proj: 'bp_shell', attacks: ['barrage', 'charge', 'volley2', 'volley'], coins: 70 },
+  { name: 'MEGA ROBOT', tex: 'boss_future', hp: 1.35, proj: 'bp_plasma', attacks: ['beam', 'barrage', 'volley2', 'charge'], beam: 0x29f0ff, coins: 90 },
 ];
 
 export const LANES = [-150, 0, 150];

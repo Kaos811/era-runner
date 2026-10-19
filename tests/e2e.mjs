@@ -143,11 +143,11 @@ try {
   check('Level 7 loops back to the Stone Age with tougher enemies', tiers.l7[0] === 0 && tiers.l7[1] === 'Thrown Rock' && tiers.l7[2] > 1.5 && tiers.l7[3] > 1, `HP x${tiers.l7[2].toFixed(2)}, dmg x${tiers.l7[3]}`);
 
   // checkpoint: gems fill the meter, passing the gate cashes it out for power-ups
-  const lap = await page.evaluate(() => [__ER.payout(5), __ER.payout(30), __ER.payout(__ER.LAP + 12), __ER.payout(__ER.LAP * 2)]);
-  check('meter payout: bands by points, each full lap banks a Legendary', lap[0].join() === '0' && lap[1].join() === '2' && lap[2].join() === '4,1' && lap[3].join() === '4,4', JSON.stringify(lap));
+  const lap = await page.evaluate(() => [__ER.payout(2), __ER.payout(12), __ER.payout(__ER.LAP + 12), __ER.payout(__ER.LAP * 2)]);
+  check('meter payout: bands by points, each full lap banks a Legendary', lap[0].join() === '0' && lap[1].join() === '2' && lap[2].join() === '4,2' && lap[3].join() === '4,4', JSON.stringify(lap));
   const cp = await page.evaluate(async () => {
     const s = __ER.scene; s.closeScreen(); s.mode = 'won'; s.startRun(1); __ER.setBot(null); s.hp = s.maxHp = 9999;
-    __ER.toCheckpoint(0, 30);
+    __ER.toCheckpoint(0, 12);
     const before = { meter: s.meter, band: s.meterBand(), dmg: s.dmg, rate: s.rate };
     let t = 0; while (!s.stats.checkpoints.length && t < 6) { s.step(1 / 60); t += 1 / 60; }
     const c = s.stats.checkpoints[0];
@@ -170,17 +170,25 @@ try {
   check('power-ups apply: +10% damage, +1 shot, orbit blades', Math.abs(pu.d1 / pu.d0 - 1.1) < 0.01 && pu.sh1 === pu.sh0 + 1 && pu.blades === 2, `dmg ${pu.d0.toFixed(1)}->${pu.d1.toFixed(1)} shots ${pu.sh0}->${pu.sh1}`);
   check('active power-ups show HUD icons', pu.icons >= 3, `${pu.icons} icon parts`);
 
-  // XP comes from gems: kill an enemy in your lane, drive over its gem
-  const gem = await page.evaluate(() => {
+  // XP comes from gems: kill an enemy in your lane; its gem pops to the side, steer onto it
+  const gemRun = (steer) => page.evaluate((steer) => {
     const s = __ER.scene; s.closeScreen(); s.mode = 'won'; s.startRun(1); __ER.setBot(null);
     s.objs.forEach((o) => { o.dead = true; }); s.qi = s.level.items.length;
     s.spawn({ type: 'enemy', at: s.d + 900, x: 0, hp: 1, size: 1, dmg: 12, section: 0 });
     s.tx = s.px = 0;
-    const xp0 = s.xp; let t = 0;
-    while (t < 5 && s.stats.gems === 0) { s.step(1 / 60); t += 1 / 60; }
-    return { xp0, xp: s.xp, gems: s.stats.gems, t, meter: s.meter };
-  });
-  check('killing an enemy drops an XP gem that also fills the checkpoint meter', gem.gems > 0 && gem.xp > gem.xp0 && gem.meter > 0, `xp ${gem.xp0} -> ${gem.xp.toFixed(1)} after ${gem.t.toFixed(1)}s`);
+    const xp0 = s.xp; let t = 0; let popped = null;
+    while (t < 5 && s.stats.gems === 0 && !(s.stats.gemsMissed > 0)) {
+      if (s.gems[0] && popped === null) popped = s.gems[0].x;
+      if (steer && s.gems[0]) s.tx = s.gems[0].x;
+      s.step(1 / 60); t += 1 / 60;
+    }
+    return { xp0, xp: s.xp, gems: s.stats.gems, missed: s.stats.gemsMissed, t, meter: s.meter, popped };
+  }, steer);
+  const still = await gemRun(false);
+  check('standing still: the gem pops out of reach and is missed', still.gems === 0 && Math.abs(still.popped) >= 40, `popped to x=${still.popped?.toFixed(0)}`);
+  const gem = await gemRun(true);
+  check('steering onto the gem picks it up: XP + checkpoint meter', gem.gems > 0 && gem.xp > gem.xp0 && gem.meter > 0, `xp ${gem.xp0} -> ${gem.xp.toFixed(1)} after ${gem.t.toFixed(1)}s`);
+  check('3 checkpoints per level (~30%, ~60%, before the boss)', await page.evaluate(() => { const L = __ER.scene.level; const f = L.checkpoints.map((c) => (c - 700) / (L.finish - 700)); return f.length === 3 && f[0] > 0.25 && f[0] < 0.35 && f[1] > 0.55 && f[1] < 0.66 && f[2] > 0.95; }));
   await page.evaluate(() => __ER.setTestUpgrades(null, false));
 
   // lose: low health, no steering -> lose screen, half the coins kept

@@ -53,7 +53,7 @@ for (const bot of bots) {
       `run ${med(w.map((r) => Math.round(r.t)))}s (boss ${med(w.map((r) => Math.round(r.bossT)))}s)  weapon2 ${Math.round((100 * a.filter((r) => r.tier % 2 === 1).length) / a.length)}%  lost@boss ${a.filter((r) => !r.won && r.reachedBoss).length}`);
   }
   const cps = runs.flatMap((r) => r.cps.map((k, i) => ({ ...k, i })));
-  for (const i of [0, 1]) {
+  for (const i of [0, 1, 2]) {
     const k = cps.filter((x) => x.i === i);
     const dist = BANDS.map((b, j) => `${b} ${Math.round((100 * k.filter((x) => !x.laps && x.band === j).length) / k.length)}%`).join(' ');
     console.log(`  checkpoint ${i + 1}: n=${k.length} pts median ${med(k.map((x) => Math.round(x.pts)))}  no-loop band: ${dist}  LOOPED ${Math.round((100 * k.filter((x) => x.laps).length) / k.length)}% (x2+: ${k.filter((x) => x.laps >= 1 && x.pts >= 0).length}, x3+: ${k.filter((x) => x.laps >= 2).length})`);
