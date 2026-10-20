@@ -1,3 +1,4 @@
+import { texScale } from './scenes/Boot.js';
 import Phaser from 'phaser';
 import { ERAS } from './eras.js';
 import { CRATES, GEMS } from './tuning.js';
@@ -111,7 +112,7 @@ export const CrateMethods = {
     this.twinC.removeAll(true);
     const P = this.pu;
     const key = 'weapon_' + this.weapon.key;
-    const big = Math.min(1.45, Math.pow(P.size, 0.6));
+    const big = Math.min(1.45, Math.pow(P.size, 0.6)) * texScale(this, key);
     this.weaponImg.setTexture(key).setScale(0.5 * big);
     const h = this.weaponImg.height * 0.5 * big * 0.92; // weapon height on screen (origin is near the base)
     this.lookTipY = -6 - h;

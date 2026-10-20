@@ -556,12 +556,14 @@ function icons(scene) {
 
 // Painted era art (see ART.md). Each file replaces the code-drawn texture of the same game key,
 // so all existing sprites pick it up; if a file is missing the code-drawn art stays as fallback.
+// disp: extra on-screen size (painted weapon hands are drawn bigger, like the mockup).
 // scale: the file is drawn at this multiple of the code texture's size (HD), the game divides it out.
 const ERA_ART = {
   stone: [
     ['enemy', 'enemy_stone'], ['enemy_b', 'enemy_stone_b'], ['enemy_big', 'enemy_stone_big'], ['enemy_charger', 'enemy_stone_charger'],
     ['block', 'block_stone'], ['crate', 'crate_stone'], ['boss', 'boss_stone', 2],
-    ['weapon_rock', 'weapon_rock'], ['weapon_sling', 'weapon_stone'],
+    // add ['weapon_rock_open', 'weapon_rock_open', 1, 1.5] once art/rockhand_open exists (empty hand at release)
+    ['weapon_rock', 'weapon_rock', 1, 1.5], ['weapon_sling', 'weapon_stone', 1, 1.5],
     ['p_pebble', 'p_pebble'], ['p_rock', 'p_rock'], ['bp_rock', 'bp_rock'],
     ['bg', 'bg_stone'], ['decor_fern', 'decor_stone_fern'], ['decor_rocks', 'decor_stone_rocks'], ['decor_palm', 'decor_stone_palm'],
   ],
@@ -583,13 +585,13 @@ export class BootScene extends Phaser.Scene {
     misc(this);
     bosses(this);
     icons(this);
-    for (const list of Object.values(ERA_ART)) for (const [, key, scale] of list) {
+    for (const list of Object.values(ERA_ART)) for (const [, key, scale, disp] of list) {
       const k = 'art_' + key;
       if (!this.textures.exists(k)) continue;
       const img = this.textures.get(k).getSourceImage();
       if (this.textures.exists(key)) this.textures.remove(key);
       const t = this.textures.addImage(key, img);
-      t.customData.scale = 1 / (scale || 1);
+      t.customData.scale = (disp || 1) / (scale || 1);
       this.textures.remove(k);
     }
     this.scene.start('game');
@@ -597,5 +599,5 @@ export class BootScene extends Phaser.Scene {
 }
 export const TEX_K = K;
 
-// size multiplier for a texture key: 0.5 for HD art drawn at 2x, else 1
+// size multiplier for a texture key: disp / HD factor (e.g. 0.5 for 2x boss art), else 1
 export const texScale = (scene, key) => scene.textures.get(key)?.customData?.scale || 1;

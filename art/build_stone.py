@@ -68,6 +68,8 @@ save(fit(key_green(src('mammoth.jpg')), 1040, 880, fill=0.98), 'boss', q=86)
 # --- weapons: 220x300 box, origin (0.5, 0.92) in game; the hand runs off the bottom edge
 save(fit(key_green(src('sling.jpg')), 220, 300, fill=1.0), 'weapon_sling')
 save(fit(key_green(src('rockhand.jpg')), 220, 300, fill=0.95), 'weapon_rock')
+if os.path.exists(os.path.join(SRC, 'rockhand_open.jpg')):  # optional: hand just after release
+    save(fit(key_green(src('rockhand_open.jpg')), 220, 300, fill=0.95), 'weapon_rock_open')
 # --- props sheet (2x2): crate, boulder, fern, rocks
 props = key_green(src('props.jpg'))
 save(fit(crop_frac(props, 0, 0, .5, .5), 260, 224, fill=0.92), 'crate')

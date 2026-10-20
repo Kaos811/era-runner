@@ -13,6 +13,7 @@ import { runMods, UPGRADES, upgCost } from '../upgrades.js';
 import { Sound } from '../audio.js';
 import { BossMethods, BOSS_HOME_Z, LANES } from '../bosses.js';
 import { ScreenMethods } from '../screens.js';
+import { texScale as texScaleOf } from './Boot.js';
 import { style, col } from '../ui.js';
 
 // ---- layout / fake-3D projection ----
@@ -279,11 +280,16 @@ export class GameScene extends Phaser.Scene {
     const spacing = e.spacing * Math.min(1.3, this.pu.size);
     const volleys = 1 + this.pu.double; // Double Shot: extra volleys just behind the first
     const muzzles = [0, ...this.twinOffsets()]; // Twin Weapon copies fire the same volley
+    const style = this.throwStyle();
+    if (style && !this.simulating) { this.throwAt = this.time; this.throwDur = Math.min(0.3, 0.8 / Math.max(0.1, this.rate)); }
     for (const mx of muzzles) {
       for (let v = 0; v < volleys; v++) {
         for (let i = 0; i < n; i++) {
           const x = this.px + mx + (i - (n - 1) / 2) * spacing + (v % 2 ? spacing / 2 : 0);
-          this.spawnProj({ x, z: 40 - v * 45, speed: e.pspeed, r: e.pr * this.pu.size, dmg: this.dmg, pierce: this.pu.pierce, tex: 'p_' + e.proj, sc: this.pu.size });
+          const q = { x, z: 40 - v * 45, speed: e.pspeed, r: e.pr * this.pu.size, dmg: this.dmg, pierce: this.pu.pierce, tex: 'p_' + e.proj, sc: this.pu.size };
+          // painted Stone Age: a thrown rock is the big spinning painted stone, launched from the hand
+          if (style) { if (style === 'throw') { q.tex = 'p_rock'; q.sc *= 2.4; } else q.sc *= 1.5; q.spin = true; q.lift = -this.lookTipY * (style === 'throw' ? 0.85 : 0.7); }
+          this.spawnProj(q);
         }
       }
     }
@@ -580,11 +586,13 @@ export class GameScene extends Phaser.Scene {
         for (const im of o.imgs) { if (o.flash > 0) im.setTintFill(0xffffff); else im.setTint(o.tint); }
         continue;
       }
-      const fade = o.z > 1500 ? Phaser.Math.Clamp((SPAWN_Z - o.z) / 400, 0, 1) : 1;
+      let fade = o.z > 1500 ? Phaser.Math.Clamp((SPAWN_Z - o.z) / 400, 0, 1) : 1;
+      // a checkpoint arch turns see-through as you close in, so gates/enemies behind it stay readable
+      if (o.type === 'checkpoint' && o.z < 1100) fade = Math.min(fade, Phaser.Math.Clamp(0.45 + (o.z - 250) / 1700, 0.45, 1));
       o.c.setAlpha(fade);
       if (o.img && o.type !== 'gate' && o.type !== 'checkpoint') {
         if (o.type === 'crate') { if (o.flash > 0) o.img.setTint(0xbff6ff); else o.img.clearTint(); continue; }
-        if (o.flash > 0) { if (o.type === 'boss') o.img.setTint(0xffb0a0); else o.img.setTintFill(0xffffff); }
+        if (o.flash > 0) { if (o.type === 'boss') o.img.setTint(0xffe2d6); else o.img.setTintFill(0xffffff); }
         else if (o.charger) o.img.setTint(o.ch && o.ch.phase === 'aim' && Math.sin(this.time * 30) > 0 ? 0xffffff : (o.painted ? 0xffb4a8 : 0xff7a6a));
         else if (o.size > 1.3 && o.type === 'enemy' && !o.painted) o.img.setTint(0xffd0c0);
         else o.img.clearTint();
@@ -602,7 +610,9 @@ export class GameScene extends Phaser.Scene {
     for (const p of this.projs) {
       if (!p.img) p.img = this.add.image(0, 0, p.tex);
       const pr = project(p.x, p.z);
-      p.img.setPosition(pr.x, pr.y - 58 * pr.s).setScale(TK * pr.s * (p.sc || 1)).setDepth(10 + FAR - p.z);
+      // lift: launched from the hand, easing down to the normal flight line over ~350 units
+      const lift = p.lift ? p.lift * Phaser.Math.Clamp(1 - (p.z - 40) / 350, 0, 1) : 0;
+      p.img.setPosition(pr.x, pr.y - 58 * pr.s - lift).setScale(TK * pr.s * (p.sc || 1)).setDepth(10 + FAR - p.z);
       if (p.spin) p.img.rotation += 0.35;
     }
     this.renderPowers(project, FAR);
@@ -612,7 +622,50 @@ export class GameScene extends Phaser.Scene {
     this.weaponImg.y = -6 + this.recoil;
     this.weaponImg.angle = Phaser.Math.Clamp((this.tx - this.px) * 0.12, -12, 12);
     this.renderWeaponLook();
+    this.renderThrow();
     this.updateHud(false);
+  }
+
+  // Visual-only shot motion for painted Stone Age weapons: 'throw' (hand swings forward, rock
+  // leaves the hand) and 'sling' (pull back, snap forward). Duration follows the fire rate.
+  throwStyle() {
+    const k = this.weapon?.key;
+    if (k === 'rock' && texScaleOf(this, 'weapon_rock') !== 1) return 'throw';
+    if (k === 'stone' && texScaleOf(this, 'weapon_stone') !== 1) return 'sling';
+    return null;
+  }
+
+  renderThrow() {
+    const style = this.throwStyle();
+    const ims = [this.weaponImg, ...(this.twinImgs || []).map((tw) => tw.list[1]).filter(Boolean)];
+    const u = style && this.throwAt != null ? (this.time - this.throwAt) / this.throwDur : 1;
+    for (const im of ims) {
+      if (im.baseSc == null) im.baseSc = im.scaleY;
+      if (im.scaleY !== im.lastSc) im.baseSc = im.scaleY; // refreshWeaponLook / evolve tweens set a new base
+      let sy = 1, sx = 1, dy = 0, ang = 0, crop = 0;
+      if (u < 1) {
+        if (style === 'throw') {
+          // 0-.3 snap forward (arm extends away: foreshortened and up), .3-1 ease back
+          const f = u < 0.3 ? Phaser.Math.Easing.Cubic.Out(u / 0.3) : 1 - Phaser.Math.Easing.Sine.InOut((u - 0.3) / 0.7);
+          sy = 1 - 0.3 * f; sx = 1 - 0.08 * f; dy = -8 * f; ang = 9 * f;
+          // swap to the open-hand art (rock released) until the arm is most of the way back, if present
+          if (this.textures.exists('weapon_rock_open')) crop = u > 0.12 && u < 0.8 ? 1 : 0;
+        } else {
+          // sling: quick pull toward you, then snap past rest and settle
+          const f = u < 0.25 ? -Phaser.Math.Easing.Quadratic.Out(u / 0.25) : u < 0.5 ? -1 + 1.6 * Phaser.Math.Easing.Quadratic.In((u - 0.25) / 0.25) : 0.6 * (1 - Phaser.Math.Easing.Sine.Out((u - 0.5) / 0.5));
+          sy = 1 + 0.07 * -f; sx = sy; dy = -22 * f; ang = 0;
+        }
+      }
+      const s0 = im.baseSc;
+      im.setScale(s0 * sx, s0 * sy);
+      im.lastSc = im.scaleY;
+      im.y = (im === this.weaponImg ? im.y : -6) + dy;
+      if (im === this.weaponImg) im.angle += ang; else im.angle = ang;
+      if (style === 'throw' && this.textures.exists('weapon_rock_open')) {
+        const want = crop ? 'weapon_rock_open' : 'weapon_rock';
+        if (im.texture.key !== want) im.setTexture(want);
+      }
+    }
   }
 
   drawTrack() {
