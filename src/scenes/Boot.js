@@ -554,8 +554,26 @@ function icons(scene) {
   make(scene, 'icon_gear', 40, 40, (p) => { p.fill(0xffffff); for (let i = 0; i < 8; i++) { const a = (i * Math.PI) / 4; p.circle(20 + Math.cos(a) * 14, 20 + Math.sin(a) * 14, 5); } p.circle(20, 20, 14); p.fill(0x333333).circle(20, 20, 6); });
 }
 
+// Painted era art (see ART.md). Each file replaces the code-drawn texture of the same game key,
+// so all existing sprites pick it up; if a file is missing the code-drawn art stays as fallback.
+// scale: the file is drawn at this multiple of the code texture's size (HD), the game divides it out.
+const ERA_ART = {
+  stone: [
+    ['enemy', 'enemy_stone'], ['enemy_b', 'enemy_stone_b'], ['enemy_big', 'enemy_stone_big'], ['enemy_charger', 'enemy_stone_charger'],
+    ['block', 'block_stone'], ['crate', 'crate_stone'], ['boss', 'boss_stone', 2],
+    ['weapon_rock', 'weapon_rock'], ['weapon_sling', 'weapon_stone'],
+    ['p_pebble', 'p_pebble'], ['p_rock', 'p_rock'], ['bp_rock', 'bp_rock'],
+    ['bg', 'bg_stone'], ['decor_fern', 'decor_stone_fern'], ['decor_rocks', 'decor_stone_rocks'], ['decor_palm', 'decor_stone_palm'],
+  ],
+};
+const ART_BASE = import.meta.env.BASE_URL + 'assets/eras/';
+
 export class BootScene extends Phaser.Scene {
   constructor() { super('boot'); }
+  preload() {
+    for (const [era, list] of Object.entries(ERA_ART)) for (const [file, key] of list) this.load.image('art_' + key, `${ART_BASE}${era}/${file}.webp`);
+    this.load.on('loaderror', (f) => console.warn('art missing, using code-drawn fallback:', f.key));
+  }
   create() {
     ERAS.forEach((e) => { enemy(this, e.key); block(this, e.key); });
     WEAPONS.forEach((w) => weapon(this, w.key));
@@ -565,7 +583,19 @@ export class BootScene extends Phaser.Scene {
     misc(this);
     bosses(this);
     icons(this);
+    for (const list of Object.values(ERA_ART)) for (const [, key, scale] of list) {
+      const k = 'art_' + key;
+      if (!this.textures.exists(k)) continue;
+      const img = this.textures.get(k).getSourceImage();
+      if (this.textures.exists(key)) this.textures.remove(key);
+      const t = this.textures.addImage(key, img);
+      t.customData.scale = 1 / (scale || 1);
+      this.textures.remove(k);
+    }
     this.scene.start('game');
   }
 }
 export const TEX_K = K;
+
+// size multiplier for a texture key: 0.5 for HD art drawn at 2x, else 1
+export const texScale = (scene, key) => scene.textures.get(key)?.customData?.scale || 1;

@@ -53,6 +53,7 @@ export class GameScene extends Phaser.Scene {
 
     this.bgOld = this.add.graphics().setDepth(0);
     this.bg = this.add.graphics().setDepth(1);
+    this.bgArt = {};
     this.track = this.add.graphics().setDepth(2);
     this.fog = this.add.graphics().setDepth(3);
     this.fx = this.add.layer().setDepth(6500);
@@ -493,14 +494,18 @@ export class GameScene extends Phaser.Scene {
       const c = this.add.container(0, 0);
       const isE = it.type === 'enemy';
       const sh = this.add.image(0, 0, 'shadow').setScale(TK * (isE ? 0.9 : 1.1) * it.size, TK * it.size);
-      const img = this.add.image(0, 0, (isE ? 'enemy_' : 'block_') + eraKey).setOrigin(0.5, 1).setScale(TK * it.size * (isE ? 1.25 : 1.1));
+      let tex = (isE ? 'enemy_' : 'block_') + eraKey;
+      // painted eras can ship look variants: charger, big brute, and an alternate grunt
+      const painted = isE && this.textures.exists(tex + '_charger');
+      if (painted) tex = it.charger ? tex + '_charger' : it.size > 1.3 ? tex + '_big' : (this.objs.length % 2 ? tex + '_b' : tex);
+      const img = this.add.image(0, 0, tex).setOrigin(0.5, 1).setScale(TK * it.size * (isE ? 1.25 : 1.1));
       const hpText = this.add.text(0, isE ? -138 * it.size : -46, String(it.hp), style(isE ? 28 : 32, '#ffffff', 6)).setOrigin(0.5);
       c.add([sh, img, hpText]);
-      if (it.size > 1.3 && isE) img.setTint(0xffd0c0);
-      this.objs.push({ type: it.type, section: it.section, c, img, hpText, x: it.x, z, hp: it.hp, maxHp: it.hp, xpVal: it.xpVal, size: it.size, dmg: it.dmg, halfW: (isE ? 36 : 50) * it.size,
+      if (it.size > 1.3 && isE && !painted) img.setTint(0xffd0c0);
+      this.objs.push({ type: it.type, section: it.section, c, img, hpText, x: it.x, z, hp: it.hp, maxHp: it.hp, xpVal: it.xpVal, size: it.size, dmg: it.dmg, halfW: (isE ? 36 : 50) * it.size, painted,
         walk: isE ? (it.walk ?? WAVES.walk) : 0, charger: !!it.charger, hittable: true, eraLook: look, bob: Math.random() * 6 });
       if (it.charger) {
-        img.setTint(0xff7a6a);
+        img.setTint(painted ? 0xffb4a8 : 0xff7a6a);
         const tag = this.add.text(0, -178 * it.size, '!', style(40, '#ff3b30', 7)).setOrigin(0.5);
         c.add(tag);
         this.objs[this.objs.length - 1].chTag = tag;
@@ -580,8 +585,8 @@ export class GameScene extends Phaser.Scene {
       if (o.img && o.type !== 'gate' && o.type !== 'checkpoint') {
         if (o.type === 'crate') { if (o.flash > 0) o.img.setTint(0xbff6ff); else o.img.clearTint(); continue; }
         if (o.flash > 0) { if (o.type === 'boss') o.img.setTint(0xffb0a0); else o.img.setTintFill(0xffffff); }
-        else if (o.charger) o.img.setTint(o.ch && o.ch.phase === 'aim' && Math.sin(this.time * 30) > 0 ? 0xffffff : 0xff7a6a);
-        else if (o.size > 1.3 && o.type === 'enemy') o.img.setTint(0xffd0c0);
+        else if (o.charger) o.img.setTint(o.ch && o.ch.phase === 'aim' && Math.sin(this.time * 30) > 0 ? 0xffffff : (o.painted ? 0xffb4a8 : 0xff7a6a));
+        else if (o.size > 1.3 && o.type === 'enemy' && !o.painted) o.img.setTint(0xffd0c0);
         else o.img.clearTint();
       } else if (o.type === 'gate') {
         o.panel.setAlpha(o.flash > 0 ? 1 : 0.92);
@@ -623,7 +628,7 @@ export class GameScene extends Phaser.Scene {
     };
     const zNear = -210;
     const first = Math.floor((this.d + zNear) / TILE);
-    const groundDark = Phaser.Display.Color.IntegerToColor(e.ground).darken(8).color;
+    const groundDark = Phaser.Display.Color.IntegerToColor(e.ground).darken(e.decor ? 4 : 8).color;
     for (let i = first; ; i++) {
       const za = Math.max(i * TILE - this.d, zNear), zb = Math.min((i + 1) * TILE - this.d, FAR);
       if (za >= FAR) break;
@@ -634,7 +639,9 @@ export class GameScene extends Phaser.Scene {
     quad(-HALF - 14, -HALF, zNear, FAR, e.rail);
     quad(HALF, HALF + 14, zNear, FAR, e.rail);
     if (e.neon) { quad(-HALF - 4, -HALF, zNear, FAR, 0xffffff, 0.8); quad(HALF, HALF + 4, zNear, FAR, 0xffffff, 0.8); }
+    this.drawDecor(e);
     // posts along the rails
+    if (e.decor) { this.drawFinishEtc(quad, zNear); return; }
     const postC = Phaser.Display.Color.IntegerToColor(e.rail).darken(15).color;
     for (let i = first; ; i++) {
       const z = i * TILE * 2 - this.d;
@@ -645,6 +652,11 @@ export class GameScene extends Phaser.Scene {
       g.fillRect(CX - (HALF + 12) * pr.s, pr.y - 26 * pr.s, 10 * pr.s, 26 * pr.s);
       g.fillRect(CX + (HALF + 2) * pr.s, pr.y - 26 * pr.s, 10 * pr.s, 26 * pr.s);
     }
+    this.drawFinishEtc(quad, zNear);
+  }
+
+  drawFinishEtc(quad, zNear) {
+    const e = ERAS[this.visEra];
     // finish line on the ground
     if (this.finishZ) {
       const fz = this.finishZ - this.d;
@@ -665,6 +677,32 @@ export class GameScene extends Phaser.Scene {
     f.fillRect(-W, HY - 1, W * 3, 70);
   }
 
+  // Roadside props (ferns, rocks, palms) recycled along both edges; they scroll with the run
+  // and scale with the fake depth like everything else. Only eras with e.decor use them.
+  drawDecor(e) {
+    const list = e.decor && e.decor.filter((d) => this.textures.exists(d[0]));
+    if (!this.decor) this.decor = [];
+    if (!list || !list.length) { this.decor.forEach((d) => d.img.setVisible(false)); return; }
+    const N = 28, SP = 260, SPAN = (N * SP) / 2;
+    if (!this.decor.length || this.decorEra !== e.key) {
+      this.decor.forEach((d) => d.img.destroy());
+      this.decor = [];
+      this.decorEra = e.key;
+      for (let i = 0; i < N; i++) {
+        const h = Math.sin(i * 91.7) * 43758.5; const r = h - Math.floor(h);
+        const [tex, base, near, far] = list[(i * 7 + Math.floor(r * 5)) % list.length];
+        const side = i % 2 ? 1 : -1;
+        this.decor.push({ img: this.add.image(0, 0, tex).setOrigin(0.5, 1), off: (i * SP) / 2 + r * 90, x: side * (HALF + near + r * (far - near)), sc: base * (0.8 + r * 0.4), flip: r > 0.5 });
+      }
+    }
+    for (const d of this.decor) {
+      const z = ((((d.off - this.d) % SPAN) + SPAN) % SPAN) - 200;
+      const pr = project(d.x, z);
+      const fade = z > 1500 ? Phaser.Math.Clamp((SPAWN_Z + 400 - z) / 800, 0, 1) : 1;
+      d.img.setVisible(true).setPosition(pr.x, pr.y).setScale(pr.s * d.sc * (d.flip ? -1 : 1), pr.s * d.sc).setDepth(10 + FAR - z).setAlpha(fade);
+    }
+  }
+
   setEraVisuals(k, instant) {
     this.visEra = k;
     if (!instant) {
@@ -676,7 +714,25 @@ export class GameScene extends Phaser.Scene {
     } else this.bg.setAlpha(1);
     this.bg.clear();
     this.drawBackground(this.bg, k);
+    this.showBgArt(k, instant);
     this.prevBgEra = k;
+  }
+
+  // Painted backdrop (bg_<era> texture) placed so the painting's horizon sits on HY.
+  // BG_ART: [horizon as a fraction of the painting's height, width in design px]
+  showBgArt(k, instant) {
+    const BG_ART = { stone: [0.381, 600] };
+    for (const im of Object.values(this.bgArt)) if (im.active) { this.tweens.killTweensOf(im); im.setVisible(false); }
+    const key = ERAS[k].key, cfg = BG_ART[key];
+    if (!cfg || !this.textures.exists('bg_' + key)) return;
+    let im = this.bgArt[key];
+    if (!im) {
+      im = this.bgArt[key] = this.add.image(CX, HY, 'bg_' + key).setDepth(1.5);
+      const sc = cfg[1] / im.width;
+      im.setScale(sc).setOrigin(0.5, cfg[0]);
+    }
+    im.setVisible(true).setAlpha(instant ? 1 : 0);
+    if (!instant) this.tweens.add({ targets: im, alpha: 1, duration: 700 });
   }
 
   drawBackground(g, k) {

@@ -1,3 +1,4 @@
+import { texScale } from './scenes/Boot.js';
 import Phaser from 'phaser';
 import { ERAS, tierDps } from './eras.js';
 import { style } from './ui.js';
@@ -42,7 +43,7 @@ export const BossMethods = {
     for (const o of this.objs) if (o.type !== 'boss') o.dead = true;
     const c = this.add.container(0, 0);
     const sh = this.add.image(0, 0, 'shadow').setScale(2.5, 1.6);
-    const img = this.add.image(0, 0, def.tex).setOrigin(0.5, 1).setScale(0.5 * 2.0);
+    const img = this.add.image(0, 0, def.tex).setOrigin(0.5, 1).setScale(0.5 * 2.0 * texScale(this, def.tex));
     const shield = this.add.graphics();
     shield.fillStyle(0x7fe8ff, 0.28).fillEllipse(0, -225, 600, 520);
     shield.lineStyle(12, 0xbff6ff, 0.9).strokeEllipse(0, -225, 600, 520);

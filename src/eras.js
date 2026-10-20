@@ -3,7 +3,9 @@
 export const ERAS = [
   {
     key: 'stone', name: 'STONE AGE',
-    sky: [0xffd98f, 0xeb9a55], ground: 0xa86f3d, track: [0xecd9b2, 0xdcc394], rail: 0x7a4a24,
+    sky: [0xffd98f, 0xeb9a55], ground: 0x8a6a3e, track: [0xd9b27c, 0xd2a972], rail: 0xb88b57,
+    // painted roadside props: [texture, scale, min and max distance outside the track edge]
+    decor: [['decor_stone_fern', 0.75, 40, 230], ['decor_stone_rocks', 0.6, 30, 260], ['decor_stone_palm', 1.1, 120, 320], ['decor_stone_fern', 0.6, 30, 160]],
     sil: 0xbf7a42, sil2: 0xa4632f, ui: 0xe08a2e, burst: 0x8b5a2b, neon: false,
   },
   {
