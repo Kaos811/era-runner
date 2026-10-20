@@ -68,8 +68,40 @@ save(fit(key_green(src('mammoth.jpg')), 1040, 880, fill=0.98), 'boss', q=86)
 # --- weapons: 220x300 box, origin (0.5, 0.92) in game; the hand runs off the bottom edge
 save(fit(key_green(src('sling.jpg')), 220, 300, fill=1.0), 'weapon_sling')
 save(fit(key_green(src('rockhand.jpg')), 220, 300, fill=0.95), 'weapon_rock')
-if os.path.exists(os.path.join(SRC, 'rockhand_open.jpg')):  # optional: hand just after release
-    save(fit(key_green(src('rockhand_open.jpg')), 220, 300, fill=0.95), 'weapon_rock_open')
+def wrist(img):
+    """(width, center x) of the arm where it leaves the bottom of a trimmed sprite."""
+    al = np.asarray(img.getchannel('A'))[-max(3, img.height // 40):] > 128
+    xs = np.where(al.any(0))[0]
+    return xs.max() - xs.min() + 1, (xs.max() + xs.min()) / 2
+
+if os.path.exists(os.path.join(SRC, 'rockhand_open.jpg')):
+    # empty hand at release: color-matched to the closed hand, scaled/placed so the wrists line up
+    closed = trim(key_green(src('rockhand.jpg')))
+    W, H, FILL = 220, 300, 0.95
+    sc_c = min(W * FILL / closed.width, H * FILL / closed.height)
+    cw, ccx = wrist(closed)
+    cx_final = (W - round(closed.width * sc_c)) // 2 + ccx * sc_c   # closed wrist center in the canvas
+    opened = trim(key_green(src('rockhand_open.jpg')))
+    # per-channel gain so the open hand's average skin matches the closed hand's
+    def skin_mean(im):
+        a = np.asarray(im).astype(np.float32); m = a[..., 3] > 200
+        rgb = a[..., :3][m]; mx, mn = rgb.max(1), rgb.min(1)
+        sk = rgb[(mx - mn) / np.maximum(mx, 1) > 0.25]           # warm skin, not grey rock
+        return sk.mean(0)
+    gain = skin_mean(closed) / skin_mean(opened)
+    a = np.asarray(opened).astype(np.float32); a[..., :3] = np.clip(a[..., :3] * gain, 0, 255)
+    opened = Image.fromarray(a.astype(np.uint8), 'RGBA')
+    ow, ocx = wrist(opened)
+    sc_o = (cw * sc_c) / ow
+    nw, nh = round(opened.width * sc_o), round(opened.height * sc_o)
+    o2 = premult_resize(opened, (nw, nh))
+    can = Image.new('RGBA', (W, H), (0, 0, 0, 0))
+    can.alpha_composite(o2.crop((0, max(0, nh - H), nw, nh)) if nh > H else o2, (0, 0)) if False else None
+    x = round(cx_final - ocx * sc_o); y = H - nh
+    can.paste(o2, (x, y), o2)
+    print('open hand gain', np.round(gain, 3), 'scale', round(sc_o / sc_c, 3))
+    save(can, 'weapon_rock_open')
+
 # --- props sheet (2x2): crate, boulder, fern, rocks
 props = key_green(src('props.jpg'))
 save(fit(crop_frac(props, 0, 0, .5, .5), 260, 224, fill=0.92), 'crate')

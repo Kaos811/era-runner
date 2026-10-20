@@ -16,7 +16,8 @@ await sleep(2500);
 // pause the scene right after a throw starts
 const grab = async (name, frac) => {
   for (let i = 0; i < 200; i++) { const u = await ev(() => { const s = __ER.scene; return s.throwAt == null ? 9 : (s.time - s.throwAt) / s.throwDur; }); if (u > frac && u < frac + 0.25) break; await sleep(15); }
-  await ev(() => __ER.scene.scene.pause()); await sleep(100);
+  // freeze exactly at this point of the swing (polling latency would otherwise overshoot)
+  await ev((frac) => { const s = __ER.scene; s.scene.pause(); s.throwAt = s.time - frac * s.throwDur; s.render(); }, frac + 0.12); await sleep(150);
   await page.screenshot({ path: `${OUT}/${name}.png` }); console.log('saved', name);
   await ev(() => __ER.scene.scene.resume());
 };

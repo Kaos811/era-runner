@@ -562,7 +562,7 @@ const ERA_ART = {
   stone: [
     ['enemy', 'enemy_stone'], ['enemy_b', 'enemy_stone_b'], ['enemy_big', 'enemy_stone_big'], ['enemy_charger', 'enemy_stone_charger'],
     ['block', 'block_stone'], ['crate', 'crate_stone'], ['boss', 'boss_stone', 2],
-    // add ['weapon_rock_open', 'weapon_rock_open', 1, 1.5] once art/rockhand_open exists (empty hand at release)
+    ['weapon_rock_open', 'weapon_rock_open', 1, 1.5], // empty hand shown at release
     ['weapon_rock', 'weapon_rock', 1, 1.5], ['weapon_sling', 'weapon_stone', 1, 1.5],
     ['p_pebble', 'p_pebble'], ['p_rock', 'p_rock'], ['bp_rock', 'bp_rock'],
     ['bg', 'bg_stone'], ['decor_fern', 'decor_stone_fern'], ['decor_rocks', 'decor_stone_rocks'], ['decor_palm', 'decor_stone_palm'],
